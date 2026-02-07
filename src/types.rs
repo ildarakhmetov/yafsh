@@ -91,6 +91,10 @@ pub struct State {
     pub collecting_loop: Option<(LoopType, Vec<String>, usize)>,
     /// Collecting each body: (output_content, body_tokens)
     pub collecting_each: Option<(String, Vec<String>)>,
+    /// Cached result of evaluating the `$prompt` word (custom prompt string)
+    pub custom_prompt: Option<String>,
+    /// Saved stack during prompt evaluation so $stack/$in/$out see the real stack
+    pub prompt_eval_original_stack: Option<Vec<Value>>,
 }
 
 impl Default for State {
@@ -112,6 +116,8 @@ impl State {
             loop_stack: Vec::new(),
             collecting_loop: None,
             collecting_each: None,
+            custom_prompt: None,
+            prompt_eval_original_stack: None,
         }
     }
 }

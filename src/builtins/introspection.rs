@@ -1,3 +1,5 @@
+use std::process::Command;
+
 use crate::types::{State, Value, Word};
 
 /// `words` ( -- ) List all available words in the dictionary.
@@ -106,6 +108,142 @@ pub fn see(state: &mut State) -> Result<(), String> {
     Ok(())
 }
 
+// ========== Prompt helper builtins ==========
+
+/// Helper: get the stack to inspect for prompt helpers.
+/// During prompt evaluation, uses the saved original stack; otherwise uses the current stack.
+fn prompt_stack(state: &State) -> &[Value] {
+    state
+        .prompt_eval_original_stack
+        .as_deref()
+        .unwrap_or(&state.stack)
+}
+
+/// Count inputs (Str/Int) vs outputs (Output) on a stack slice.
+fn count_stack(stack: &[Value]) -> (usize, usize) {
+    let mut inputs = 0;
+    let mut outputs = 0;
+    for val in stack {
+        match val {
+            Value::Str(_) | Value::Int(_) => inputs += 1,
+            Value::Output(_) => outputs += 1,
+        }
+    }
+    (inputs, outputs)
+}
+
+/// `$stack` ( -- str ) Push formatted `[n:m]` stack indicator.
+pub fn dollar_stack(state: &mut State) -> Result<(), String> {
+    let stack = prompt_stack(state);
+    let (inputs, outputs) = count_stack(stack);
+    let total = inputs + outputs;
+
+    let indicator = if total == 0 {
+        String::new()
+    } else if outputs == 0 {
+        format!("[{}]", inputs)
+    } else if inputs == 0 {
+        format!("[:{}]", outputs)
+    } else {
+        format!("[{}:{}]", inputs, outputs)
+    };
+    state.stack.push(Value::Str(indicator));
+    Ok(())
+}
+
+/// `$in` ( -- int ) Push count of input items on the stack.
+pub fn dollar_in(state: &mut State) -> Result<(), String> {
+    let stack = prompt_stack(state);
+    let (inputs, _) = count_stack(stack);
+    state.stack.push(Value::Int(inputs as i64));
+    Ok(())
+}
+
+/// `$out` ( -- int ) Push count of output items on the stack.
+pub fn dollar_out(state: &mut State) -> Result<(), String> {
+    let stack = prompt_stack(state);
+    let (_, outputs) = count_stack(stack);
+    state.stack.push(Value::Int(outputs as i64));
+    Ok(())
+}
+
+/// `$gitbranch` ( -- str ) Push current git branch name (empty if not in a git repo).
+pub fn dollar_gitbranch(state: &mut State) -> Result<(), String> {
+    let branch = Command::new("git")
+        .args(["branch", "--show-current"])
+        .output()
+        .ok()
+        .and_then(|out| {
+            if out.status.success() {
+                Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
+    state.stack.push(Value::Str(branch));
+    Ok(())
+}
+
+/// `$cwd` ( -- str ) Push the current working directory.
+pub fn dollar_cwd(state: &mut State) -> Result<(), String> {
+    let cwd = std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| "?".to_string());
+    state.stack.push(Value::Str(cwd));
+    Ok(())
+}
+
+/// `$basename` ( -- str ) Push the basename of the current working directory.
+pub fn dollar_basename(state: &mut State) -> Result<(), String> {
+    let basename = std::env::current_dir()
+        .ok()
+        .and_then(|p| p.file_name().map(|f| f.to_string_lossy().to_string()))
+        .unwrap_or_else(|| "?".to_string());
+    state.stack.push(Value::Str(basename));
+    Ok(())
+}
+
+/// `$hostname` ( -- str ) Push the system hostname.
+pub fn dollar_hostname(state: &mut State) -> Result<(), String> {
+    let hostname = Command::new("hostname")
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    state.stack.push(Value::Str(hostname));
+    Ok(())
+}
+
+/// `$username` ( -- str ) Push the current username.
+pub fn dollar_username(state: &mut State) -> Result<(), String> {
+    let username = std::env::var("USER")
+        .or_else(|_| std::env::var("LOGNAME"))
+        .unwrap_or_else(|_| "unknown".to_string());
+    state.stack.push(Value::Str(username));
+    Ok(())
+}
+
+/// `$exitcode` ( -- str ) Push the last exit code as a string.
+pub fn dollar_exitcode(state: &mut State) -> Result<(), String> {
+    state
+        .stack
+        .push(Value::Str(state.last_exit_code.to_string()));
+    Ok(())
+}
+
+/// `$time` ( -- str ) Push current time as HH:MM.
+pub fn dollar_time(state: &mut State) -> Result<(), String> {
+    let time_str = Command::new("date")
+        .arg("+%H:%M")
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .unwrap_or_else(|| "??:??".to_string());
+    state.stack.push(Value::Str(time_str));
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,5 +310,175 @@ mod tests {
         let mut s = new_state();
         s.stack.push(Value::Int(42));
         assert!(see(&mut s).is_err());
+    }
+
+    // ===== Prompt helper tests =====
+
+    #[test]
+    fn test_dollar_stack_empty() {
+        let mut s = new_state();
+        dollar_stack(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("".into())]);
+    }
+
+    #[test]
+    fn test_dollar_stack_inputs_only() {
+        let mut s = new_state();
+        s.stack.push(Value::Int(1));
+        s.stack.push(Value::Str("x".into()));
+        dollar_stack(&mut s).unwrap();
+        // 2 inputs, then the result string
+        assert_eq!(s.stack.len(), 3);
+        assert_eq!(s.stack[2], Value::Str("[2]".into()));
+    }
+
+    #[test]
+    fn test_dollar_stack_outputs_only() {
+        let mut s = new_state();
+        s.stack.push(Value::Output("data".into()));
+        dollar_stack(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 2);
+        assert_eq!(s.stack[1], Value::Str("[:1]".into()));
+    }
+
+    #[test]
+    fn test_dollar_stack_mixed() {
+        let mut s = new_state();
+        s.stack.push(Value::Int(1));
+        s.stack.push(Value::Output("data".into()));
+        dollar_stack(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 3);
+        assert_eq!(s.stack[2], Value::Str("[1:1]".into()));
+    }
+
+    #[test]
+    fn test_dollar_in() {
+        let mut s = new_state();
+        s.stack.push(Value::Int(1));
+        s.stack.push(Value::Str("x".into()));
+        s.stack.push(Value::Output("data".into()));
+        dollar_in(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 4);
+        assert_eq!(s.stack[3], Value::Int(2));
+    }
+
+    #[test]
+    fn test_dollar_out() {
+        let mut s = new_state();
+        s.stack.push(Value::Output("data".into()));
+        dollar_out(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 2);
+        assert_eq!(s.stack[1], Value::Int(1));
+    }
+
+    #[test]
+    fn test_dollar_cwd() {
+        let mut s = new_state();
+        dollar_cwd(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 1);
+        match &s.stack[0] {
+            Value::Str(v) => assert!(!v.is_empty()),
+            other => panic!("expected Str, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_dollar_basename() {
+        let mut s = new_state();
+        dollar_basename(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 1);
+        match &s.stack[0] {
+            Value::Str(v) => assert!(!v.is_empty()),
+            other => panic!("expected Str, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_dollar_username() {
+        let mut s = new_state();
+        dollar_username(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 1);
+        match &s.stack[0] {
+            Value::Str(v) => assert!(!v.is_empty()),
+            other => panic!("expected Str, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_dollar_exitcode() {
+        let mut s = new_state();
+        s.last_exit_code = 42;
+        dollar_exitcode(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("42".into())]);
+    }
+
+    #[test]
+    fn test_dollar_exitcode_zero() {
+        let mut s = new_state();
+        dollar_exitcode(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("0".into())]);
+    }
+
+    #[test]
+    fn test_dollar_gitbranch() {
+        let mut s = new_state();
+        // Just verify it runs without error (may or may not be in a git repo)
+        dollar_gitbranch(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 1);
+    }
+
+    #[test]
+    fn test_dollar_hostname() {
+        let mut s = new_state();
+        dollar_hostname(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 1);
+        match &s.stack[0] {
+            Value::Str(v) => assert!(!v.is_empty()),
+            other => panic!("expected Str, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_dollar_time() {
+        let mut s = new_state();
+        dollar_time(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 1);
+        match &s.stack[0] {
+            Value::Str(v) => {
+                // Should match HH:MM pattern
+                assert!(v.contains(':'), "time should contain colon: {}", v);
+            }
+            other => panic!("expected Str, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_dollar_stack_uses_original_during_prompt_eval() {
+        let mut s = new_state();
+        // Simulate prompt evaluation: real stack has 3 items
+        s.prompt_eval_original_stack = Some(vec![
+            Value::Int(1),
+            Value::Int(2),
+            Value::Output("x".into()),
+        ]);
+        // Current stack is empty (cleared for prompt eval)
+        dollar_stack(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("[2:1]".into())]);
+    }
+
+    #[test]
+    fn test_dollar_in_uses_original_during_prompt_eval() {
+        let mut s = new_state();
+        s.prompt_eval_original_stack = Some(vec![Value::Int(1), Value::Str("x".into())]);
+        dollar_in(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Int(2)]);
+    }
+
+    #[test]
+    fn test_dollar_out_uses_original_during_prompt_eval() {
+        let mut s = new_state();
+        s.prompt_eval_original_stack = Some(vec![Value::Output("data".into())]);
+        dollar_out(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Int(1)]);
     }
 }

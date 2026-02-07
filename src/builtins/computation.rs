@@ -251,6 +251,88 @@ pub fn concat(state: &mut State) -> Result<(), String> {
     }
 }
 
+// ========== Conditional string helpers ==========
+
+/// `?prefix` ( str sep -- result ) Prepend separator if string is non-empty.
+///
+/// If str is empty, pushes empty string. Otherwise pushes sep+str.
+pub fn cond_prefix(state: &mut State) -> Result<(), String> {
+    if state.stack.len() < 2 {
+        return Err("?prefix: stack underflow".into());
+    }
+    let sep = state.stack.pop().unwrap();
+    let s = state.stack.pop().unwrap();
+    match (s, sep) {
+        (Value::Str(s), Value::Str(sep)) => {
+            if s.is_empty() {
+                state.stack.push(Value::Str(String::new()));
+            } else {
+                state.stack.push(Value::Str(format!("{}{}", sep, s)));
+            }
+            Ok(())
+        }
+        (s, sep) => {
+            state.stack.push(s);
+            state.stack.push(sep);
+            Err("?prefix: requires two strings".into())
+        }
+    }
+}
+
+/// `?suffix` ( str sep -- result ) Append separator if string is non-empty.
+///
+/// If str is empty, pushes empty string. Otherwise pushes str+sep.
+pub fn cond_suffix(state: &mut State) -> Result<(), String> {
+    if state.stack.len() < 2 {
+        return Err("?suffix: stack underflow".into());
+    }
+    let sep = state.stack.pop().unwrap();
+    let s = state.stack.pop().unwrap();
+    match (s, sep) {
+        (Value::Str(s), Value::Str(sep)) => {
+            if s.is_empty() {
+                state.stack.push(Value::Str(String::new()));
+            } else {
+                state.stack.push(Value::Str(format!("{}{}", s, sep)));
+            }
+            Ok(())
+        }
+        (s, sep) => {
+            state.stack.push(s);
+            state.stack.push(sep);
+            Err("?suffix: requires two strings".into())
+        }
+    }
+}
+
+/// `?wrap` ( str prefix suffix -- result ) Wrap string if non-empty.
+///
+/// If str is empty, pushes empty string. Otherwise pushes prefix+str+suffix.
+pub fn cond_wrap(state: &mut State) -> Result<(), String> {
+    if state.stack.len() < 3 {
+        return Err("?wrap: stack underflow".into());
+    }
+    let suffix = state.stack.pop().unwrap();
+    let prefix = state.stack.pop().unwrap();
+    let s = state.stack.pop().unwrap();
+    match (s, prefix, suffix) {
+        (Value::Str(s), Value::Str(prefix), Value::Str(suffix)) => {
+            if s.is_empty() {
+                state.stack.push(Value::Str(String::new()));
+            } else {
+                state.stack.push(Value::Str(format!("{}{}{}", prefix, s, suffix)));
+            }
+            Ok(())
+        }
+        (s, prefix, suffix) => {
+            state.stack.push(s);
+            state.stack.push(prefix);
+            state.stack.push(suffix);
+            Err("?wrap: requires three strings".into())
+        }
+    }
+}
+
 // ========== Loop index words ==========
 
 /// `i` ( -- index ) Push current (innermost) loop index.
@@ -657,5 +739,81 @@ mod tests {
     fn test_and_wrong_type() {
         let mut s = state_with(vec![Value::Str("a".into()), Value::Int(1)]);
         assert!(bool_and(&mut s).is_err());
+    }
+
+    // ===== Conditional string helpers =====
+
+    #[test]
+    fn test_cond_prefix_nonempty() {
+        let mut s = state_with(vec![Value::Str("main".into()), Value::Str("@".into())]);
+        cond_prefix(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("@main".into())]);
+    }
+
+    #[test]
+    fn test_cond_prefix_empty() {
+        let mut s = state_with(vec![Value::Str("".into()), Value::Str("@".into())]);
+        cond_prefix(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("".into())]);
+    }
+
+    #[test]
+    fn test_cond_prefix_underflow() {
+        let mut s = state_with(vec![Value::Str("x".into())]);
+        assert!(cond_prefix(&mut s).is_err());
+    }
+
+    #[test]
+    fn test_cond_prefix_wrong_type() {
+        let mut s = state_with(vec![Value::Int(1), Value::Str("@".into())]);
+        assert!(cond_prefix(&mut s).is_err());
+    }
+
+    #[test]
+    fn test_cond_suffix_nonempty() {
+        let mut s = state_with(vec![Value::Str("main".into()), Value::Str("!".into())]);
+        cond_suffix(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("main!".into())]);
+    }
+
+    #[test]
+    fn test_cond_suffix_empty() {
+        let mut s = state_with(vec![Value::Str("".into()), Value::Str("!".into())]);
+        cond_suffix(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("".into())]);
+    }
+
+    #[test]
+    fn test_cond_suffix_underflow() {
+        let mut s = state_with(vec![Value::Str("x".into())]);
+        assert!(cond_suffix(&mut s).is_err());
+    }
+
+    #[test]
+    fn test_cond_wrap_nonempty() {
+        let mut s = state_with(vec![
+            Value::Str("hello".into()),
+            Value::Str("[".into()),
+            Value::Str("]".into()),
+        ]);
+        cond_wrap(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("[hello]".into())]);
+    }
+
+    #[test]
+    fn test_cond_wrap_empty() {
+        let mut s = state_with(vec![
+            Value::Str("".into()),
+            Value::Str("[".into()),
+            Value::Str("]".into()),
+        ]);
+        cond_wrap(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("".into())]);
+    }
+
+    #[test]
+    fn test_cond_wrap_underflow() {
+        let mut s = state_with(vec![Value::Str("x".into()), Value::Str("[".into())]);
+        assert!(cond_wrap(&mut s).is_err());
     }
 }

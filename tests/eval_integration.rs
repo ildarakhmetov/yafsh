@@ -943,6 +943,155 @@ fn eval_each_wrong_type() {
     assert!(result.unwrap_err().contains("requires Output"));
 }
 
+// ========== Conditional string helpers ==========
+
+#[test]
+fn eval_cond_prefix_nonempty() {
+    let s = eval_lines(&["\"main\" \"@\" ?prefix"]);
+    assert_eq!(s.stack, vec![Value::Str("@main".into())]);
+}
+
+#[test]
+fn eval_cond_prefix_empty() {
+    let s = eval_lines(&["\"\" \"@\" ?prefix"]);
+    assert_eq!(s.stack, vec![Value::Str("".into())]);
+}
+
+#[test]
+fn eval_cond_suffix_nonempty() {
+    let s = eval_lines(&["\"main\" \"!\" ?suffix"]);
+    assert_eq!(s.stack, vec![Value::Str("main!".into())]);
+}
+
+#[test]
+fn eval_cond_suffix_empty() {
+    let s = eval_lines(&["\"\" \"!\" ?suffix"]);
+    assert_eq!(s.stack, vec![Value::Str("".into())]);
+}
+
+#[test]
+fn eval_cond_wrap_nonempty() {
+    let s = eval_lines(&["\"hello\" \"[\" \"]\" ?wrap"]);
+    assert_eq!(s.stack, vec![Value::Str("[hello]".into())]);
+}
+
+#[test]
+fn eval_cond_wrap_empty() {
+    let s = eval_lines(&["\"\" \"[\" \"]\" ?wrap"]);
+    assert_eq!(s.stack, vec![Value::Str("".into())]);
+}
+
+#[test]
+fn eval_cond_prefix_in_word_definition() {
+    // Simulate prompt building: "$gitbranch" "@" ?prefix
+    let s = eval_lines(&[
+        ": branch-prefix \"@\" ?prefix ;",
+        "\"main\" branch-prefix",
+    ]);
+    assert_eq!(s.stack, vec![Value::Str("@main".into())]);
+}
+
+#[test]
+fn eval_cond_prefix_chained() {
+    // Chain ?prefix and ?suffix
+    let s = eval_lines(&["\"dev\" \"(\" ?prefix \")\" ?suffix"]);
+    assert_eq!(s.stack, vec![Value::Str("(dev)".into())]);
+}
+
+// ========== Prompt helper builtins ==========
+
+#[test]
+fn eval_dollar_stack_empty() {
+    let s = eval_lines(&["$stack"]);
+    assert_eq!(s.stack, vec![Value::Str("".into())]);
+}
+
+#[test]
+fn eval_dollar_stack_with_items() {
+    let s = eval_lines(&["1 2 3 $stack"]);
+    assert_eq!(s.stack.len(), 4);
+    assert_eq!(s.stack[3], Value::Str("[3]".into()));
+}
+
+#[test]
+fn eval_dollar_in() {
+    let s = eval_lines(&["1 2 $in"]);
+    assert_eq!(s.stack.len(), 3);
+    assert_eq!(s.stack[2], Value::Int(2));
+}
+
+#[test]
+fn eval_dollar_out() {
+    let s = eval_lines(&["\"data\" >output $out"]);
+    assert_eq!(s.stack.len(), 2);
+    assert_eq!(s.stack[1], Value::Int(1));
+}
+
+#[test]
+fn eval_dollar_cwd() {
+    let s = eval_lines(&["$cwd"]);
+    assert_eq!(s.stack.len(), 1);
+    match &s.stack[0] {
+        Value::Str(v) => assert!(!v.is_empty()),
+        other => panic!("expected Str, got {:?}", other),
+    }
+}
+
+#[test]
+fn eval_dollar_basename() {
+    let s = eval_lines(&["$basename"]);
+    assert_eq!(s.stack.len(), 1);
+    match &s.stack[0] {
+        Value::Str(v) => assert!(!v.is_empty()),
+        other => panic!("expected Str, got {:?}", other),
+    }
+}
+
+#[test]
+fn eval_dollar_username() {
+    let s = eval_lines(&["$username"]);
+    assert_eq!(s.stack.len(), 1);
+    match &s.stack[0] {
+        Value::Str(v) => assert!(!v.is_empty()),
+        other => panic!("expected Str, got {:?}", other),
+    }
+}
+
+#[test]
+fn eval_dollar_exitcode() {
+    let s = eval_lines(&["/bin/false", "$exitcode"]);
+    // Stack: Output from /bin/false, then "1"
+    assert_eq!(s.stack.len(), 2);
+    assert_eq!(s.stack[1], Value::Str("1".into()));
+}
+
+#[test]
+fn eval_dollar_time() {
+    let s = eval_lines(&["$time"]);
+    assert_eq!(s.stack.len(), 1);
+    match &s.stack[0] {
+        Value::Str(v) => assert!(v.contains(':'), "time should contain colon: {}", v),
+        other => panic!("expected Str, got {:?}", other),
+    }
+}
+
+#[test]
+fn eval_dollar_gitbranch() {
+    // Just verify it runs without error
+    let s = eval_lines(&["$gitbranch"]);
+    assert_eq!(s.stack.len(), 1);
+}
+
+#[test]
+fn eval_dollar_hostname() {
+    let s = eval_lines(&["$hostname"]);
+    assert_eq!(s.stack.len(), 1);
+    match &s.stack[0] {
+        Value::Str(v) => assert!(!v.is_empty()),
+        other => panic!("expected Str, got {:?}", other),
+    }
+}
+
 // ========== Loops in word definitions ==========
 
 #[test]

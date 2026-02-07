@@ -74,6 +74,11 @@ pub fn register_builtins(state: &mut State) {
     // String operations
     reg(state, "concat", computation::concat, "( a b -- a+b ) Concatenate two strings");
 
+    // Conditional string helpers
+    reg(state, "?prefix", computation::cond_prefix, "( str sep -- result ) Prepend separator if string non-empty");
+    reg(state, "?suffix", computation::cond_suffix, "( str sep -- result ) Append separator if string non-empty");
+    reg(state, "?wrap", computation::cond_wrap, "( str prefix suffix -- result ) Wrap string if non-empty");
+
     // Loop indices
     reg(state, "i", computation::loop_i, "( -- index ) Push current loop index");
     reg(state, "j", computation::loop_j, "( -- index ) Push outer loop index (nested loops)");
@@ -82,4 +87,16 @@ pub fn register_builtins(state: &mut State) {
     reg(state, "words", introspection::words, "List all available words");
     reg(state, "help", introspection::help, "Show comprehensive help information");
     reg(state, "see", introspection::see, "( name -- ) Show word definition or documentation");
+
+    // Prompt helpers
+    reg(state, "$stack", introspection::dollar_stack, "( -- str ) Formatted [n:m] stack indicator");
+    reg(state, "$in", introspection::dollar_in, "( -- int ) Count of input items on stack");
+    reg(state, "$out", introspection::dollar_out, "( -- int ) Count of output items on stack");
+    reg(state, "$gitbranch", introspection::dollar_gitbranch, "( -- str ) Current git branch name");
+    reg(state, "$cwd", introspection::dollar_cwd, "( -- str ) Current working directory");
+    reg(state, "$basename", introspection::dollar_basename, "( -- str ) Basename of current directory");
+    reg(state, "$hostname", introspection::dollar_hostname, "( -- str ) System hostname");
+    reg(state, "$username", introspection::dollar_username, "( -- str ) Current username");
+    reg(state, "$exitcode", introspection::dollar_exitcode, "( -- str ) Last exit code as string");
+    reg(state, "$time", introspection::dollar_time, "( -- str ) Current time as HH:MM");
 }
