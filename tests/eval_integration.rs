@@ -660,3 +660,349 @@ fn eval_word_with_comparison() {
     let s = eval_lines(&[": positive? 0 > ;", "5 positive?"]);
     assert_eq!(s.stack, vec![Value::Int(1)]);
 }
+
+// ========== begin...until loops ==========
+
+#[test]
+fn eval_begin_until_count_to_5() {
+    // Count from 0 to 5
+    let s = eval_lines(&["0 begin 1 + dup 5 = until"]);
+    assert_eq!(s.stack, vec![Value::Int(5)]);
+}
+
+#[test]
+fn eval_begin_until_executes_at_least_once() {
+    // Even with a true condition, the body executes once
+    let s = eval_lines(&["10 begin dup 1 + dup 5 > until"]);
+    // 10 dup -> 10 10, 1 + -> 10 11, dup -> 10 11 11, 5 > -> 10 11 1 -> pops 1 (true), exits
+    assert_eq!(s.stack, vec![Value::Int(10), Value::Int(11)]);
+}
+
+#[test]
+fn eval_begin_until_doubling() {
+    // Double until > 16
+    let s = eval_lines(&["1 begin 2 * dup 16 > until"]);
+    assert_eq!(s.stack, vec![Value::Int(32)]);
+}
+
+#[test]
+fn eval_begin_until_with_stack_ops() {
+    // Count to 3 and collect values
+    let s = eval_lines(&["0 begin 1 + dup 3 = until"]);
+    assert_eq!(s.stack, vec![Value::Int(3)]);
+}
+
+// ========== begin...while...repeat loops ==========
+
+#[test]
+fn eval_begin_while_repeat_countdown() {
+    // Count down from 5 to 0, collecting values
+    let s = eval_lines(&["5 begin dup 0 > while 1 - repeat"]);
+    assert_eq!(s.stack, vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_begin_while_repeat_false_never_enters() {
+    // Condition is false initially: body never executes
+    let s = eval_lines(&["0 begin dup 0 > while 1 - repeat"]);
+    assert_eq!(s.stack, vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_begin_while_repeat_sum() {
+    // Sum from 1 to 5: 0 sum, 5 counter
+    let s = eval_lines(&["0 5 begin dup 0 > while swap over + swap 1 - repeat drop"]);
+    assert_eq!(s.stack, vec![Value::Int(15)]);
+}
+
+#[test]
+fn eval_begin_while_repeat_doubling() {
+    // Double until >= 100
+    let s = eval_lines(&["1 begin dup 100 < while 2 * repeat"]);
+    assert_eq!(s.stack, vec![Value::Int(128)]);
+}
+
+// ========== do...loop counted loops ==========
+
+#[test]
+fn eval_do_loop_simple() {
+    // Sum 0+1+2+3+4 using loop index
+    let s = eval_lines(&["0 0 5 do i + loop"]);
+    assert_eq!(s.stack, vec![Value::Int(10)]);
+}
+
+#[test]
+fn eval_do_loop_with_start_and_end() {
+    // Sum 3+4+5+6
+    let s = eval_lines(&["0 3 7 do i + loop"]);
+    assert_eq!(s.stack, vec![Value::Int(18)]);
+}
+
+#[test]
+fn eval_do_loop_empty_range() {
+    // Empty range: start == limit, body never executes
+    let s = eval_lines(&["42 5 5 do i + loop"]);
+    assert_eq!(s.stack, vec![Value::Int(42)]);
+}
+
+#[test]
+fn eval_do_loop_accumulate() {
+    // Sum 1+2+3+4+5
+    let s = eval_lines(&["0 1 6 do i + loop"]);
+    assert_eq!(s.stack, vec![Value::Int(15)]);
+}
+
+#[test]
+fn eval_do_loop_nested_with_ij() {
+    // Nested loops: collect j*10 + i for 2x2 grid
+    let s = eval_lines(&["0 2 do 0 2 do j 10 * i + loop loop"]);
+    // Iterations: (j=0,i=0)->0, (j=0,i=1)->1, (j=1,i=0)->10, (j=1,i=1)->11
+    // Stack accumulates: 0 1 10 11
+    assert_eq!(
+        s.stack,
+        vec![Value::Int(0), Value::Int(1), Value::Int(10), Value::Int(11)]
+    );
+}
+
+// ========== do...+loop counted loops ==========
+
+#[test]
+fn eval_do_plus_loop_step_by_2() {
+    // Collect even numbers 0,2,4,6,8
+    let s = eval_lines(&["0 10 do i 2 +loop"]);
+    assert_eq!(
+        s.stack,
+        vec![
+            Value::Int(0),
+            Value::Int(2),
+            Value::Int(4),
+            Value::Int(6),
+            Value::Int(8)
+        ]
+    );
+}
+
+#[test]
+fn eval_do_plus_loop_negative_step() {
+    // Count down: 10,8,6,4,2
+    let s = eval_lines(&["10 0 do i -2 +loop"]);
+    assert_eq!(
+        s.stack,
+        vec![
+            Value::Int(10),
+            Value::Int(8),
+            Value::Int(6),
+            Value::Int(4),
+            Value::Int(2)
+        ]
+    );
+}
+
+#[test]
+fn eval_do_plus_loop_step_by_3() {
+    // 0,3,6,9
+    let s = eval_lines(&["0 10 do i 3 +loop"]);
+    assert_eq!(
+        s.stack,
+        vec![Value::Int(0), Value::Int(3), Value::Int(6), Value::Int(9)]
+    );
+}
+
+// ========== each...then ==========
+
+#[test]
+fn eval_each_iterates_lines() {
+    // Create multi-line output and iterate
+    let mut s = new_state();
+    s.stack.push(Value::Output("one\ntwo\nthree".into()));
+    eval::eval_line(&mut s, "each then").unwrap();
+    // each pushes each line as Str, body is empty so they accumulate
+    assert_eq!(
+        s.stack,
+        vec![
+            Value::Str("one".into()),
+            Value::Str("two".into()),
+            Value::Str("three".into())
+        ]
+    );
+}
+
+#[test]
+fn eval_each_with_body() {
+    // Iterate and apply operations
+    let mut s = new_state();
+    s.stack.push(Value::Output("hello\nworld".into()));
+    eval::eval_line(&mut s, "each \"!\" concat then").unwrap();
+    assert_eq!(
+        s.stack,
+        vec![
+            Value::Str("hello!".into()),
+            Value::Str("world!".into())
+        ]
+    );
+}
+
+#[test]
+fn eval_each_empty_output() {
+    // Empty output: body never executes
+    let mut s = new_state();
+    s.stack.push(Value::Output("".into()));
+    eval::eval_line(&mut s, "each . then").unwrap();
+    assert!(s.stack.is_empty());
+}
+
+// ========== Loop error handling ==========
+
+#[test]
+fn eval_until_without_begin() {
+    let mut s = new_state();
+    let result = eval::eval_line(&mut s, "until");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("no matching begin"));
+}
+
+#[test]
+fn eval_repeat_without_begin() {
+    let mut s = new_state();
+    let result = eval::eval_line(&mut s, "repeat");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("no matching begin"));
+}
+
+#[test]
+fn eval_loop_without_do() {
+    let mut s = new_state();
+    let result = eval::eval_line(&mut s, "loop");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("no matching do"));
+}
+
+#[test]
+fn eval_plus_loop_without_do() {
+    let mut s = new_state();
+    let result = eval::eval_line(&mut s, "+loop");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("no matching do"));
+}
+
+#[test]
+fn eval_until_stack_underflow() {
+    let mut s = new_state();
+    let result = eval::eval_line(&mut s, "begin until");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("stack underflow"));
+}
+
+#[test]
+fn eval_while_stack_underflow() {
+    let mut s = new_state();
+    let result = eval::eval_line(&mut s, "begin while repeat");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("stack underflow"));
+}
+
+#[test]
+fn eval_do_stack_underflow() {
+    let mut s = new_state();
+    s.stack.push(Value::Int(5));
+    let result = eval::eval_line(&mut s, "do loop");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("stack underflow"));
+}
+
+#[test]
+fn eval_i_outside_loop() {
+    let mut s = new_state();
+    let result = eval::eval_line(&mut s, "i");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("not inside a loop"));
+}
+
+#[test]
+fn eval_j_outside_nested_loop() {
+    let mut s = new_state();
+    let result = eval::eval_line(&mut s, "0 2 do j loop");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("not inside a nested loop"));
+}
+
+#[test]
+fn eval_each_stack_underflow() {
+    let mut s = new_state();
+    let result = eval::eval_line(&mut s, "each then");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("stack underflow"));
+}
+
+#[test]
+fn eval_each_wrong_type() {
+    let mut s = new_state();
+    s.stack.push(Value::Str("not output".into()));
+    let result = eval::eval_line(&mut s, "each then");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("requires Output"));
+}
+
+// ========== Loops in word definitions ==========
+
+#[test]
+fn eval_word_with_begin_while_loop() {
+    // Define a word with a loop
+    let s = eval_lines(&[
+        ": countdown begin dup 0 > while 1 - repeat ;",
+        "5 countdown",
+    ]);
+    assert_eq!(s.stack, vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_word_with_do_loop() {
+    // Define a word with a do loop
+    let s = eval_lines(&[": sum-to 0 swap 1 swap do i + loop ;", "5 sum-to"]);
+    // sum-to: 0 swap -> n 0, 1 swap -> 0 1 n, do i + loop -> sum 1..n-1
+    // Wait, 5 sum-to: stack starts with 5
+    // : sum-to 0 swap 1 swap do i + loop ;
+    // 5 sum-to -> 0 swap(5,0)->5,0 1 swap(0,1)->5,1,0... hmm that's wrong
+    // Let me think again: 5 sum-to
+    // body: 0 swap 1 swap do i + loop
+    // stack: [5]
+    // 0 -> [5, 0]
+    // swap -> [0, 5]
+    // 1 -> [0, 5, 1]
+    // swap -> [0, 1, 5]
+    // do -> start=1, limit=5, body = [i, +]
+    // i=1: 0 + 1 = 1
+    // i=2: 1 + 2 = 3
+    // i=3: 3 + 3 = 6
+    // i=4: 6 + 4 = 10
+    assert_eq!(s.stack, vec![Value::Int(10)]);
+}
+
+#[test]
+fn eval_word_with_begin_until_loop() {
+    // Define a word with begin...until
+    let s = eval_lines(&[
+        ": triple-until begin 3 * dup 100 > until ;",
+        "1 triple-until",
+    ]);
+    // 1 -> 3 -> 9 -> 27 -> 81 -> 243 (>100, stop)
+    assert_eq!(s.stack, vec![Value::Int(243)]);
+}
+
+#[test]
+fn eval_nested_begin_while_loops() {
+    // Nested begin...while...repeat is supported through depth tracking
+    let s = eval_lines(&[
+        "0 3 begin dup 0 > while swap 2 begin dup 0 > while 1 - swap 1 + swap repeat drop swap 1 - repeat drop",
+    ]);
+    // Outer loop runs 3 times, inner loop adds 2 each time: 0 + 2 + 2 + 2 = 6
+    assert_eq!(s.stack, vec![Value::Int(6)]);
+}
+
+#[test]
+fn eval_loop_with_if_inside() {
+    // Use if/else/then inside a loop
+    let s = eval_lines(&["0 0 10 do i 2 mod 0 = if i + then loop"]);
+    // Sum of even numbers 0..9: 0+2+4+6+8 = 20
+    assert_eq!(s.stack, vec![Value::Int(20)]);
+}

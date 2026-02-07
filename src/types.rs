@@ -39,6 +39,24 @@ pub enum Word {
     ShellCmd(String),
 }
 
+/// Loop type during body collection.
+#[derive(Clone, Debug)]
+pub enum LoopType {
+    BeginUntil,
+    BeginWhile,
+    DoLoop,
+    DoPlusLoop,
+}
+
+/// Active loop info (for i/j index access).
+#[derive(Clone, Debug)]
+pub enum LoopInfo {
+    DoCountedLoop { start: i64, limit: i64, current: i64 },
+    DoPlusCountedLoop { start: i64, limit: i64, current: i64 },
+    BeginUntilLoop,
+    BeginWhileLoop,
+}
+
 /// Control flow target for skipping.
 #[derive(Clone, Debug)]
 pub enum SkipTarget {
@@ -67,6 +85,12 @@ pub struct State {
     pub control_flow: ControlFlow,
     /// Directory stack for pushd/popd
     pub dir_stack: Vec<String>,
+    /// Stack of active loops for i/j index access
+    pub loop_stack: Vec<LoopInfo>,
+    /// Collecting loop body: (loop_type, body_tokens, nesting_depth)
+    pub collecting_loop: Option<(LoopType, Vec<String>, usize)>,
+    /// Collecting each body: (output_content, body_tokens)
+    pub collecting_each: Option<(String, Vec<String>)>,
 }
 
 impl Default for State {
@@ -85,6 +109,9 @@ impl State {
             last_exit_code: 0,
             control_flow: ControlFlow::Normal,
             dir_stack: Vec::new(),
+            loop_stack: Vec::new(),
+            collecting_loop: None,
+            collecting_each: None,
         }
     }
 }

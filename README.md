@@ -139,6 +139,52 @@ yafsh> 5 3 > if "big" else "small" then .
 big
 ```
 
+### Loops
+
+Forth-style loops for iteration:
+
+```
+yafsh> 0 begin 1 + dup 5 = until .       # begin...until (runs at least once)
+5
+yafsh> 5 begin dup 0 > while dup . 1 - repeat drop   # begin...while...repeat
+5
+4
+3
+2
+1
+yafsh> 0 5 do i . loop                   # counted loop with index
+0
+1
+2
+3
+4
+yafsh> 0 10 do i . 2 +loop               # counted loop with step
+0
+2
+4
+6
+8
+```
+
+Iterate over output lines with `each ... then`:
+
+```
+yafsh> ls each "file: " swap concat . then
+file: src
+file: Cargo.toml
+...
+```
+
+Nested loops use `i` for the inner index and `j` for the outer:
+
+```
+yafsh> 0 2 do 0 2 do j 10 * i + . loop loop
+0
+1
+10
+11
+```
+
 ### Word definitions
 
 ```
@@ -221,6 +267,8 @@ dup: ( a -- a a ) Duplicate top item
 - **Directory**: `cd`, `pushd`, `popd`
 - **Word definitions**: `: square dup * ;`
 - **Control flow**: `if` / `else` / `then`
+- **Loops**: `begin`/`until`, `begin`/`while`/`repeat`, `do`/`loop`, `do`/`+loop`, `each`/`then`
+- **Loop indices**: `i` (inner), `j` (outer)
 - **Globs**: `*.rs` expands to matching files
 - **Introspection**: `words`, `help`, `see`
 
@@ -248,7 +296,7 @@ Or after building:
 cargo test
 ```
 
-211 tests (122 unit + 89 integration).
+Tests cover all features including loops, nesting, and error handling.
 
 ## Acknowledgements
 

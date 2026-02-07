@@ -2,8 +2,9 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
 use crate::builtins::system::exec_word;
+use crate::loops;
 use crate::tokenizer;
-use crate::types::{ControlFlow, SkipTarget, State, Value, Word};
+use crate::types::{ControlFlow, LoopType, SkipTarget, State, Value, Word};
 
 // ========== PATH lookup ==========
 
@@ -224,6 +225,32 @@ fn handle_control_flow_keywords(state: &mut State, token: &str) -> Result<bool, 
         // Start word definition
         state.defining = Some("UNNAMED".to_string());
         Ok(true)
+    } else if token == "begin" {
+        // Start begin...until or begin...while...repeat loop
+        state.collecting_loop = Some((LoopType::BeginUntil, Vec::new(), 0));
+        Ok(true)
+    } else if token == "do" {
+        // Start do...loop or do...+loop
+        state.collecting_loop = Some((LoopType::DoLoop, Vec::new(), 0));
+        Ok(true)
+    } else if token == "each" {
+        // Start each...then - pop Output from stack
+        match state.stack.pop() {
+            Some(Value::Output(content)) => {
+                state.collecting_each = Some((content, Vec::new()));
+                Ok(true)
+            }
+            Some(_) => Err("each: requires Output on stack".into()),
+            None => Err("each: stack underflow".into()),
+        }
+    } else if token == "until" {
+        Err("until: no matching begin".into())
+    } else if token == "repeat" {
+        Err("repeat: no matching begin".into())
+    } else if token == "loop" {
+        Err("loop: no matching do".into())
+    } else if token == "+loop" {
+        Err("+loop: no matching do".into())
     } else {
         Ok(false)
     }
@@ -290,22 +317,32 @@ fn handle_token_execution(state: &mut State, token: &str, is_quoted: bool) -> Re
 
 /// Evaluate a single token within the current interpreter state.
 pub fn eval_token(state: &mut State, token: &str, is_quoted: bool) -> Result<(), String> {
-    // 1. Are we defining a word?
+    // 1. Are we collecting an each...then body?
+    if state.collecting_each.is_some() {
+        return loops::handle_each_collection(state, token);
+    }
+
+    // 2. Are we collecting a loop body?
+    if state.collecting_loop.is_some() {
+        return loops::handle_loop_collection(state, token);
+    }
+
+    // 3. Are we defining a word?
     if state.defining.is_some() {
         return handle_word_definition(state, token);
     }
 
-    // 2. Are we skipping (control flow)?
+    // 4. Are we skipping (control flow)?
     if let ControlFlow::Skipping { ref target, depth } = state.control_flow.clone() {
         return handle_control_flow_skipping(state, token, target.clone(), depth);
     }
 
-    // 3. Is it a control flow keyword?
+    // 5. Is it a control flow keyword?
     if !is_quoted && handle_control_flow_keywords(state, token)? {
         return Ok(());
     }
 
-    // 4. Execute normally
+    // 6. Execute normally
     handle_token_execution(state, token, is_quoted)
 }
 

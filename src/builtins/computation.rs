@@ -1,4 +1,4 @@
-use crate::types::{State, Value};
+use crate::types::{LoopInfo, State, Value};
 
 // ========== Helpers ==========
 
@@ -247,6 +247,41 @@ pub fn concat(state: &mut State) -> Result<(), String> {
             state.stack.push(a);
             state.stack.push(b);
             Err("concat: requires two strings".into())
+        }
+    }
+}
+
+// ========== Loop index words ==========
+
+/// `i` ( -- index ) Push current (innermost) loop index.
+pub fn loop_i(state: &mut State) -> Result<(), String> {
+    match state.loop_stack.last() {
+        Some(LoopInfo::DoCountedLoop { current, .. })
+        | Some(LoopInfo::DoPlusCountedLoop { current, .. }) => {
+            state.stack.push(Value::Int(*current));
+            Ok(())
+        }
+        Some(LoopInfo::BeginUntilLoop) | Some(LoopInfo::BeginWhileLoop) => {
+            Err("i: loop index not available (not a counted loop)".into())
+        }
+        None => Err("i: not inside a loop".into()),
+    }
+}
+
+/// `j` ( -- index ) Push outer loop index (for nested loops).
+pub fn loop_j(state: &mut State) -> Result<(), String> {
+    let len = state.loop_stack.len();
+    if len < 2 {
+        return Err("j: not inside a nested loop".into());
+    }
+    match &state.loop_stack[len - 2] {
+        LoopInfo::DoCountedLoop { current, .. }
+        | LoopInfo::DoPlusCountedLoop { current, .. } => {
+            state.stack.push(Value::Int(*current));
+            Ok(())
+        }
+        LoopInfo::BeginUntilLoop | LoopInfo::BeginWhileLoop => {
+            Err("j: outer loop index not available (not a counted loop)".into())
         }
     }
 }

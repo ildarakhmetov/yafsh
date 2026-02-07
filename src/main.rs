@@ -43,7 +43,7 @@ fn main() {
     let mut state = State::new();
     builtins::register_builtins(&mut state);
 
-    println!("yafsh 0.1.0");
+    println!("yafsh 0.3.0");
     println!("Type 'exit' to quit, Ctrl-D for EOF");
     println!();
 

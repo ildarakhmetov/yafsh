@@ -37,6 +37,14 @@ pub fn help(_state: &mut State) -> Result<(), String> {
     println!("  if ... then               - conditional");
     println!("  if ... else ... then      - conditional with else");
     println!();
+    println!("Loops:");
+    println!("  begin ... until           - loop until condition is true");
+    println!("  begin ... while ... repeat - loop while condition is true");
+    println!("  start limit do ... loop   - counted loop (step 1)");
+    println!("  start limit do ... +loop  - counted loop (step from stack)");
+    println!("  output each ... then      - iterate over output lines");
+    println!("  i j                       - loop indices");
+    println!();
     println!("Word Definition:");
     println!("  : name ... ;              - define new word");
     println!();

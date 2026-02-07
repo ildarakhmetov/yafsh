@@ -74,6 +74,10 @@ pub fn register_builtins(state: &mut State) {
     // String operations
     reg(state, "concat", computation::concat, "( a b -- a+b ) Concatenate two strings");
 
+    // Loop indices
+    reg(state, "i", computation::loop_i, "( -- index ) Push current loop index");
+    reg(state, "j", computation::loop_j, "( -- index ) Push outer loop index (nested loops)");
+
     // Introspection
     reg(state, "words", introspection::words, "List all available words");
     reg(state, "help", introspection::help, "Show comprehensive help information");
