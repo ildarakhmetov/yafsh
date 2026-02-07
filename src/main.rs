@@ -1,10 +1,7 @@
-mod builtins;
-mod eval;
-mod tokenizer;
-mod types;
-
 use std::io::{self, Write};
-use types::{State, Value};
+use yafsh::builtins;
+use yafsh::eval;
+use yafsh::types::{State, Value};
 
 /// Count inputs (Str/Int) vs outputs (Output) on the stack.
 fn count_stack(stack: &[Value]) -> (usize, usize) {

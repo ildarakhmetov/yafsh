@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 /// Core value types on the stack.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     /// User input, command arguments
     Str(String),
