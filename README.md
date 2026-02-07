@@ -6,6 +6,36 @@ Yet another Forth-based shell, written in Rust. A fun weekend project.
 
 Stack-based shell using RPN -- push arguments, then execute commands.
 
+### How it works
+
+There are three value types on the stack:
+
+- **Str** -- strings and command arguments (`"hello"`, unquoted words)
+- **Int** -- integers (`42`, `-1`)
+- **Output** -- captured command output (result of running a shell command)
+
+The key distinction is between **Str** and **Output**. When a command runs, it
+consumes **Str/Int** values as command-line arguments and **Output** values as
+stdin. The command's stdout is captured and pushed back as a new **Output**.
+
+```
+yafsh> "hello" echo       # "hello" is Str → becomes arg → runs: echo hello
+hello                      # Output auto-prints
+yafsh[:1]> wc              # Output from echo → pipes as stdin to wc
+```
+
+The prompt tells you what's on the stack:
+
+| Prompt | Meaning |
+|--------|---------|
+| `yafsh>` | stack empty |
+| `yafsh[3]>` | 3 inputs (Str/Int), no outputs |
+| `yafsh[:2]>` | no inputs, 2 outputs (Output) |
+| `yafsh[2:1]>` | 2 inputs + 1 output |
+
+The `.s` command shows the full stack with type markers:
+`"hello"` for Str, `42` for Int, `«data»` for Output.
+
 ### Basics
 
 ```
