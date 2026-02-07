@@ -95,6 +95,10 @@ pub struct State {
     pub custom_prompt: Option<String>,
     /// Saved stack during prompt evaluation so $stack/$in/$out see the real stack
     pub prompt_eval_original_stack: Option<Vec<Value>>,
+    /// Trace verbosity level: 0=off, 1=minimal, 2=normal, 3=verbose (with doc strings)
+    pub trace: u8,
+    /// Step counter for trace output (reset per eval_line)
+    pub trace_step: usize,
 }
 
 impl Default for State {
@@ -118,6 +122,8 @@ impl State {
             collecting_each: None,
             custom_prompt: None,
             prompt_eval_original_stack: None,
+            trace: 0,
+            trace_step: 0,
         }
     }
 }

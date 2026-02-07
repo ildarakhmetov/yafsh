@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 
 use crate::builtins::system::exec_word;
@@ -125,6 +126,161 @@ fn expand_glob(pattern: &str) -> Vec<String> {
             .into_iter()
             .map(|f| format!("{}/{}", dir, f))
             .collect()
+    }
+}
+
+// ========== Trace helpers ==========
+
+// ANSI color codes
+const C_RESET: &str = "\x1b[0m";
+const C_BOLD: &str = "\x1b[1m";
+const C_DIM: &str = "\x1b[2m";
+const C_RED: &str = "\x1b[31m";
+const C_GREEN: &str = "\x1b[32m";
+const C_YELLOW: &str = "\x1b[33m";
+const C_MAGENTA: &str = "\x1b[35m";
+const C_CYAN: &str = "\x1b[36m";
+
+/// Format a single value for trace display (compact, no colors).
+fn trace_fmt_value(val: &Value) -> String {
+    match val {
+        Value::Str(s) => format!("\"{}\"", s),
+        Value::Int(n) => format!("{}", n),
+        Value::Output(s) => {
+            let line_count = s.lines().count();
+            if line_count <= 1 {
+                let trimmed = s.trim_end();
+                if trimmed.len() > 30 {
+                    format!("<<{}...>>", &trimmed[..27])
+                } else {
+                    format!("<<{}>>", trimmed)
+                }
+            } else {
+                format!("<<output {} lines>>", line_count)
+            }
+        }
+    }
+}
+
+/// Format a single value for trace display with colors.
+fn trace_fmt_value_colored(val: &Value) -> String {
+    match val {
+        Value::Str(s) => format!("{C_YELLOW}\"{}\"{C_RESET}", s),
+        Value::Int(n) => format!("{C_CYAN}{}{C_RESET}", n),
+        Value::Output(s) => {
+            let line_count = s.lines().count();
+            if line_count <= 1 {
+                let trimmed = s.trim_end();
+                if trimmed.len() > 30 {
+                    format!("{C_MAGENTA}<<{C_RESET}{}...{C_MAGENTA}>>{C_RESET}", &trimmed[..27])
+                } else {
+                    format!("{C_MAGENTA}<<{C_RESET}{}{C_MAGENTA}>>{C_RESET}", trimmed)
+                }
+            } else {
+                format!("{C_MAGENTA}<<output {} lines>>{C_RESET}", line_count)
+            }
+        }
+    }
+}
+
+/// Format the stack contents for trace display with colors.
+fn trace_fmt_stack(stack: &[Value]) -> String {
+    if stack.is_empty() {
+        format!("{C_DIM}(empty){C_RESET}")
+    } else {
+        stack
+            .iter()
+            .map(trace_fmt_value_colored)
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+/// Describe the diff between stack states before and after a token execution.
+fn trace_describe_diff(before: &[Value], after: &[Value]) -> String {
+    // Find common prefix length
+    let common = before
+        .iter()
+        .zip(after.iter())
+        .take_while(|(a, b)| a == b)
+        .count();
+
+    let popped = &before[common..];
+    let pushed = &after[common..];
+
+    let mut parts = Vec::new();
+
+    if !popped.is_empty() {
+        let items: Vec<String> = popped.iter().rev().map(trace_fmt_value).collect();
+        parts.push(format!("{C_RED}pop{C_RESET} {}", items.join(", ")));
+    }
+
+    if !pushed.is_empty() {
+        let items: Vec<String> = pushed.iter().map(trace_fmt_value).collect();
+        parts.push(format!("{C_GREEN}push{C_RESET} {}", items.join(", ")));
+    }
+
+    if parts.is_empty() {
+        format!("{C_DIM}(no stack change){C_RESET}")
+    } else {
+        parts.join("; ")
+    }
+}
+
+/// Print a trace line for a token evaluation step.
+///
+/// Verbosity levels:
+///   1 = push/pop description only
+///   2 = push/pop + stack state
+///   3 = push/pop + doc string + stack state
+fn trace_print_step(
+    level: u8,
+    step: usize,
+    token: &str,
+    is_quoted: bool,
+    before: &[Value],
+    after: &[Value],
+    doc: Option<&str>,
+) {
+    let display_token = if is_quoted {
+        format!("{C_YELLOW}\"{}\"", token)
+    } else {
+        format!("{C_BOLD}{}", token)
+    };
+
+    let desc = trace_describe_diff(before, after);
+
+    eprintln!(
+        "  {C_DIM}Step {}{C_RESET} {:<20}{C_RESET} \u{2192} {}",
+        step, display_token, desc,
+    );
+    if level >= 3 {
+        if let Some(doc) = doc {
+            eprintln!(
+                "  {C_DIM}{:>28} {}{C_RESET}",
+                "", doc
+            );
+        }
+    }
+    if level >= 2 {
+        let stack_display = trace_fmt_stack(after);
+        eprintln!(
+            "  {C_DIM}{:>28} Stack:{C_RESET} {}",
+            "", stack_display
+        );
+    }
+    let _ = std::io::stderr().flush();
+}
+
+/// Look up the doc string for a token from the dictionary.
+fn trace_lookup_doc<'a>(state: &'a State, token: &str, is_quoted: bool) -> Option<&'a str> {
+    if is_quoted {
+        return None;
+    }
+    match state.dict.get(token)? {
+        Word::Builtin(_, Some(doc)) => Some(doc),
+        Word::Defined(_) => Some("(user-defined word)"),
+        _ => None,
     }
 }
 
@@ -337,17 +493,42 @@ pub fn eval_token(state: &mut State, token: &str, is_quoted: bool) -> Result<(),
         return handle_control_flow_skipping(state, token, target.clone(), depth);
     }
 
+    // Trace: snapshot stack before execution
+    let trace_level = state.trace;
+    let stack_before = if trace_level > 0 {
+        Some(state.stack.clone())
+    } else {
+        None
+    };
+
     // 5. Is it a control flow keyword?
     if !is_quoted && handle_control_flow_keywords(state, token)? {
+        if let Some(before) = stack_before {
+            state.trace_step += 1;
+            let doc = trace_lookup_doc(state, token, is_quoted);
+            trace_print_step(trace_level, state.trace_step, token, is_quoted, &before, &state.stack, doc);
+        }
         return Ok(());
     }
 
     // 6. Execute normally
-    handle_token_execution(state, token, is_quoted)
+    let result = handle_token_execution(state, token, is_quoted);
+
+    // Trace: print step after execution
+    if let Some(before) = stack_before {
+        state.trace_step += 1;
+        let doc = trace_lookup_doc(state, token, is_quoted);
+        trace_print_step(trace_level, state.trace_step, token, is_quoted, &before, &state.stack, doc);
+    }
+
+    result
 }
 
 /// Evaluate a full line of input.
 pub fn eval_line(state: &mut State, line: &str) -> Result<(), String> {
+    // Reset trace step counter for each new line
+    state.trace_step = 0;
+
     let tokens = tokenizer::tokenize(line);
 
     // Handle special `: name` prefix -- consume name early

@@ -3,6 +3,11 @@ use std::process::{Command, Stdio};
 
 use crate::types::{State, Value};
 
+/// Extract the short command name from a full path (e.g., "/usr/bin/grep" -> "grep").
+fn cmd_basename(cmd: &str) -> &str {
+    cmd.rsplit('/').next().unwrap_or(cmd)
+}
+
 /// `exec` ( args... cmd -- output ) Execute shell command with arguments from stack.
 ///
 /// Stack layout: top is the command, below it are arguments and optional depth limit.
@@ -79,6 +84,28 @@ pub fn exec_word(state: &mut State) -> Result<(), String> {
     // Concatenate stdin data
     let stdin_data: String = stdin_parts.into_iter().rev().collect();
     let has_stdin = !stdin_data.is_empty();
+
+    // Trace: show command details
+    if state.trace > 0 {
+        let name = cmd_basename(&cmd);
+        let args_display = if cmd_args.is_empty() {
+            name.to_string()
+        } else {
+            format!("{} {}", name, cmd_args.join(" "))
+        };
+        if has_stdin {
+            eprintln!(
+                "  {:>28} \x1b[34mexec\x1b[0m [\x1b[1m{}\x1b[0m] \x1b[2mwith piped stdin\x1b[0m",
+                "", args_display
+            );
+        } else {
+            eprintln!(
+                "  {:>28} \x1b[34mexec\x1b[0m [\x1b[1m{}\x1b[0m]",
+                "", args_display
+            );
+        }
+        let _ = std::io::stderr().flush();
+    }
 
     // Execute
     let result = if has_stdin {

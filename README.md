@@ -1,12 +1,21 @@
 # yafsh
 
-Yet another Forth-based shell, written in Rust. A fun weekend project.
+Yet another Forth-based shell, written in Rust. A fully functional stack-based
+shell with built-in trace mode that lets you see exactly how each command
+manipulates the stack -- making it a great tool for learning Forth-style
+programming and Reverse Polish Notation.
+
+Inspired by and based on [fsh](https://github.com/AlexanderBrevig/fsh) by
+Alexander Brevig -- an elegant Forth-based shell written in OCaml. yafsh is a
+Rust port of fsh's core design, extended with educational features like
+step-by-step tracing.
 
 ## What works
 
 Stack-based shell using RPN -- push arguments, then execute commands. Features
-readline editing, syntax highlighting, tab completion, persistent history,
-multiline input, and custom prompts via `rustyline`.
+a built-in trace mode for learning, readline editing, syntax highlighting, tab
+completion, persistent history, multiline input, and custom prompts via
+`rustyline`.
 
 ### How it works
 
@@ -37,6 +46,21 @@ The prompt tells you what's on the stack:
 
 The `.s` command shows the full stack with type markers:
 `"hello"` for Str, `42` for Int, and `<<data>>` for Output.
+
+### Trace mode -- learning how the stack works
+
+To understand the examples below, try enabling trace mode. It shows what gets
+pushed, popped, and the resulting stack after every operation -- making the
+invisible stack visible.
+
+```
+yafsh> "on" trace
+yafsh> 2 3 + .            # now watch each step
+```
+
+Verbosity levels: `1 trace` (compact push/pop only), `2 trace` or `"on" trace`
+(push/pop + stack state), `3 trace` (adds doc strings for each word). Disable
+with `"off" trace`.
 
 ### Basics
 
@@ -349,6 +373,7 @@ dup: ( a -- a a ) Duplicate top item
 - **Prompt helpers**: `$stack`, `$in`, `$out`, `$gitbranch`, `$cwd`, `$basename`, `$hostname`, `$username`, `$exitcode`, `$time`
 - **Configuration**: `~/.yafshrc` startup file, custom `$prompt` word
 - **Introspection**: `words`, `help`, `see`
+- **Trace mode**: `trace` with levels 0-3 for step-by-step stack visualization
 
 ## Installation
 
@@ -378,11 +403,7 @@ echo '"hello" .' | cargo run
 cargo test
 ```
 
-318 tests cover all features including loops, nesting, REPL builtins, and error handling.
-
-## Acknowledgements
-
-Inspired by and based on [fsh](https://github.com/AlexanderBrevig/fsh) by Alexander Brevig -- an elegant Forth-based shell written in OCaml. Thank you for the great reference implementation!
+330 tests cover all features including loops, nesting, trace mode, REPL builtins, and error handling.
 
 ## License
 

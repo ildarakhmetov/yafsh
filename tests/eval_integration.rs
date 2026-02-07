@@ -1155,3 +1155,109 @@ fn eval_loop_with_if_inside() {
     // Sum of even numbers 0..9: 0+2+4+6+8 = 20
     assert_eq!(s.stack, vec![Value::Int(20)]);
 }
+
+// ========== Trace mode ==========
+
+#[test]
+fn eval_trace_on_sets_flag() {
+    let mut s = new_state();
+    assert_eq!(s.trace, 0);
+    eval::eval_line(&mut s, "\"on\" trace").unwrap();
+    assert_eq!(s.trace, 2);
+}
+
+#[test]
+fn eval_trace_off_clears_flag() {
+    let mut s = new_state();
+    s.trace = 2;
+    eval::eval_line(&mut s, "\"off\" trace").unwrap();
+    assert_eq!(s.trace, 0);
+}
+
+#[test]
+fn eval_trace_numeric_levels() {
+    let mut s = new_state();
+    eval::eval_line(&mut s, "1 trace").unwrap();
+    assert_eq!(s.trace, 1);
+    eval::eval_line(&mut s, "3 trace").unwrap();
+    assert_eq!(s.trace, 3);
+    eval::eval_line(&mut s, "0 trace").unwrap();
+    assert_eq!(s.trace, 0);
+}
+
+#[test]
+fn eval_trace_invalid_level() {
+    let mut s = new_state();
+    assert!(eval::eval_line(&mut s, "5 trace").is_err());
+}
+
+#[test]
+fn eval_trace_wrong_arg() {
+    let mut s = new_state();
+    assert!(eval::eval_line(&mut s, "\"maybe\" trace").is_err());
+}
+
+#[test]
+fn eval_trace_wrong_type() {
+    let mut s = new_state();
+    s.stack.push(Value::Output("data".into()));
+    assert!(eval::eval_line(&mut s, "trace").is_err());
+}
+
+#[test]
+fn eval_trace_underflow() {
+    let mut s = new_state();
+    assert!(eval::eval_line(&mut s, "trace").is_err());
+}
+
+#[test]
+fn eval_trace_does_not_affect_computation() {
+    // Trace mode at each level should not change the result
+    for level in 1..=3u8 {
+        let mut s = new_state();
+        s.trace = level;
+        eval::eval_line(&mut s, "3 4 +").unwrap();
+        assert_eq!(s.stack, vec![Value::Int(7)]);
+    }
+}
+
+#[test]
+fn eval_trace_does_not_affect_string_ops() {
+    let mut s = new_state();
+    s.trace = 2;
+    eval::eval_line(&mut s, "\"hello\" \"world\" swap").unwrap();
+    assert_eq!(
+        s.stack,
+        vec![Value::Str("world".into()), Value::Str("hello".into())]
+    );
+}
+
+#[test]
+fn eval_trace_step_counter_resets_per_line() {
+    let mut s = new_state();
+    s.trace = 1;
+    eval::eval_line(&mut s, "1 2 3").unwrap();
+    assert_eq!(s.trace_step, 3);
+    // Second line resets counter
+    eval::eval_line(&mut s, "4").unwrap();
+    assert_eq!(s.trace_step, 1);
+}
+
+#[test]
+fn eval_trace_with_if_else() {
+    // Trace mode should work correctly with control flow
+    let mut s = new_state();
+    s.trace = 2;
+    eval::eval_line(&mut s, "1 if \"yes\" else \"no\" then").unwrap();
+    assert_eq!(s.stack, vec![Value::Str("yes".into())]);
+}
+
+#[test]
+fn eval_trace_with_word_definition() {
+    // Trace mode should handle word definitions without errors
+    let mut s = new_state();
+    s.trace = 3;
+    eval::eval_line(&mut s, ": square dup * ;").unwrap();
+    eval::eval_line(&mut s, "5 square").unwrap();
+    assert_eq!(s.stack, vec![Value::Int(25)]);
+}

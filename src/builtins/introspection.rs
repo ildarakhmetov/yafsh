@@ -244,6 +244,46 @@ pub fn dollar_time(state: &mut State) -> Result<(), String> {
     Ok(())
 }
 
+/// `trace` ( level -- ) Set trace verbosity level.
+///
+/// Accepts a string or integer:
+///   "off" or 0 -- disable tracing
+///   "on"  or 2 -- normal tracing (push/pop + stack)
+///   1          -- minimal (push/pop only)
+///   3          -- verbose (push/pop + doc strings + stack)
+pub fn trace_mode(state: &mut State) -> Result<(), String> {
+    let val = state.stack.pop().ok_or("trace: stack underflow")?;
+    match val {
+        Value::Str(s) => match s.as_str() {
+            "on" => {
+                state.trace = 2;
+                eprintln!("Trace mode ON (level 2)");
+                Ok(())
+            }
+            "off" => {
+                state.trace = 0;
+                eprintln!("Trace mode OFF");
+                Ok(())
+            }
+            _ => Err("trace: expected \"on\", \"off\", or 0-3".into()),
+        },
+        Value::Int(n) if (0..=3).contains(&n) => {
+            state.trace = n as u8;
+            if n == 0 {
+                eprintln!("Trace mode OFF");
+            } else {
+                eprintln!("Trace mode level {}", n);
+            }
+            Ok(())
+        }
+        Value::Int(_) => Err("trace: level must be 0-3".into()),
+        other => {
+            state.stack.push(other);
+            Err("trace: expected string or integer (0-3)".into())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

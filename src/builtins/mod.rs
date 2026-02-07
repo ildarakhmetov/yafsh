@@ -87,6 +87,7 @@ pub fn register_builtins(state: &mut State) {
     reg(state, "words", introspection::words, "List all available words");
     reg(state, "help", introspection::help, "Show comprehensive help information");
     reg(state, "see", introspection::see, "( name -- ) Show word definition or documentation");
+    reg(state, "trace", introspection::trace_mode, "( level -- ) Set trace verbosity: \"on\"/\"off\" or 0-3");
 
     // Prompt helpers
     reg(state, "$stack", introspection::dollar_stack, "( -- str ) Formatted [n:m] stack indicator");
