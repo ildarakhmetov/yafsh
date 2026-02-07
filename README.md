@@ -4,7 +4,9 @@ Yet another Forth-based shell, written in Rust. A fun weekend project.
 
 ## What works
 
-Stack-based shell using RPN -- push arguments, then execute commands.
+Stack-based shell using RPN -- push arguments, then execute commands. Features
+readline editing, syntax highlighting, tab completion, persistent history,
+multiline input, and custom prompts via `rustyline`.
 
 ### How it works
 
@@ -206,6 +208,21 @@ yafsh> "hello " "world" concat .
 hello world
 ```
 
+### Conditional string helpers
+
+Build dynamic strings that collapse to empty when their content is empty:
+
+```
+yafsh> "main" "@" ?prefix .       # prepend "@" if non-empty
+@main
+yafsh> "" "@" ?prefix .           # empty stays empty
+                                  # (empty string)
+yafsh> "main" "!" ?suffix .       # append "!" if non-empty
+main!
+yafsh> "hello" "[" "]" ?wrap .    # wrap if non-empty
+[hello]
+```
+
 ### Type conversions and exit codes
 
 ```
@@ -243,6 +260,55 @@ yafsh> ls >output "listing.txt" >file       # write to file (truncate)
 yafsh> "more data" >output "log.txt" >>file # append to file
 ```
 
+### Prompt helpers
+
+Builtins that push useful info onto the stack for building custom prompts:
+
+```
+yafsh> $cwd .                 # current working directory
+/home/user/projects
+yafsh> $basename .            # basename of cwd
+projects
+yafsh> $gitbranch .           # current git branch (empty if not in repo)
+main
+yafsh> $username .            # current user
+user
+yafsh> $hostname .            # system hostname
+myhost
+yafsh> $time .                # current time
+14:30
+yafsh> $stack .               # stack indicator like [2:1]
+
+yafsh> $exitcode .            # last exit code as string
+0
+yafsh> $in .                  # count of input items (Str/Int) on stack
+0
+yafsh> $out .                 # count of output items on stack
+0
+```
+
+### Custom prompts
+
+Define a `$prompt` word in `~/.yafshrc` to customize the prompt:
+
+```
+: $prompt $username "@" ?suffix $hostname concat " " concat $basename concat $gitbranch "@" ?prefix concat $stack concat "> " concat ;
+```
+
+This produces a prompt like: `user@myhost projects@main[2:1]> `
+
+### Configuration
+
+Place startup commands in `~/.yafshrc`. Lines starting with `#` are ignored.
+Useful for defining words, setting environment variables, or configuring a
+custom prompt:
+
+```
+# ~/.yafshrc
+"/usr/local/bin" "PATH" env-prepend
+: $prompt $basename $stack concat "> " concat ;
+```
+
 ### Introspection
 
 ```
@@ -251,6 +317,16 @@ yafsh> help                   # show built-in help
 yafsh> "dup" see              # show documentation for a word
 dup: ( a -- a a ) Duplicate top item
 ```
+
+### Interactive REPL features
+
+- **Readline editing** -- arrow keys, Ctrl-A/E, kill/yank, and all standard keybindings
+- **Syntax highlighting** -- strings (yellow), keywords (magenta), numbers (cyan), dictionary words (green)
+- **Tab completion** -- completes dictionary words and filenames
+- **Persistent history** -- saved to `~/.yafsh_history` across sessions
+- **Multiline input** -- unclosed quotes, `:` without `;`, unbalanced loops and conditionals automatically request continuation lines
+- **Ctrl-C** -- cancels current line without exiting
+- **Pipe mode** -- when stdin is not a TTY, falls back to a simple line reader for scripting
 
 ### Feature list
 
@@ -261,7 +337,7 @@ dup: ( a -- a a ) Duplicate top item
 - **Arithmetic**: `+`, `-`, `*`, `/`, `mod`, `/mod`, `*/`
 - **Comparisons**: `=`, `>`, `<`, `>=`, `<=`, `<>`
 - **Boolean**: `and`, `or`, `not`, `xor`
-- **String**: `concat`
+- **String**: `concat`, `?prefix`, `?suffix`, `?wrap`
 - **Shell**: auto PATH lookup, auto-piping, depth control, `cd`, `?` (exit code)
 - **Environment**: `getenv`, `setenv`, `unsetenv`, `env-append`, `env-prepend`, `env`
 - **Directory**: `cd`, `pushd`, `popd`
@@ -270,12 +346,18 @@ dup: ( a -- a a ) Duplicate top item
 - **Loops**: `begin`/`until`, `begin`/`while`/`repeat`, `do`/`loop`, `do`/`+loop`, `each`/`then`
 - **Loop indices**: `i` (inner), `j` (outer)
 - **Globs**: `*.rs` expands to matching files
+- **Prompt helpers**: `$stack`, `$in`, `$out`, `$gitbranch`, `$cwd`, `$basename`, `$hostname`, `$username`, `$exitcode`, `$time`
+- **Configuration**: `~/.yafshrc` startup file, custom `$prompt` word
 - **Introspection**: `words`, `help`, `see`
 
-## Building
+## Installation
+
+Download a pre-built binary from [Releases](https://github.com/ildarakhmetov/yafsh/releases),
+or build from source:
 
 ```
 cargo build --release
+./target/release/yafsh
 ```
 
 ## Running
@@ -284,10 +366,10 @@ cargo build --release
 cargo run
 ```
 
-Or after building:
+Or pipe a script:
 
 ```
-./target/release/yafsh
+echo '"hello" .' | cargo run
 ```
 
 ## Testing
@@ -296,7 +378,7 @@ Or after building:
 cargo test
 ```
 
-Tests cover all features including loops, nesting, and error handling.
+318 tests cover all features including loops, nesting, REPL builtins, and error handling.
 
 ## Acknowledgements
 
