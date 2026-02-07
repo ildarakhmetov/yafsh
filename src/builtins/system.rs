@@ -149,11 +149,155 @@ pub fn cd(state: &mut State) -> Result<(), String> {
     }
 }
 
+// ========== Environment variables ==========
+
+/// `getenv` ( key -- value ) Get environment variable (empty string if unset).
+pub fn getenv(state: &mut State) -> Result<(), String> {
+    let val = state.stack.pop().ok_or("getenv: stack underflow")?;
+    match val {
+        Value::Str(key) => {
+            let value = std::env::var(&key).unwrap_or_default();
+            state.stack.push(Value::Str(value));
+            Ok(())
+        }
+        other => {
+            state.stack.push(other);
+            Err("getenv: requires string".into())
+        }
+    }
+}
+
+/// `setenv` ( value key -- ) Set environment variable.
+pub fn setenv(state: &mut State) -> Result<(), String> {
+    if state.stack.len() < 2 {
+        return Err("setenv: stack underflow".into());
+    }
+    let key = state.stack.pop().unwrap();
+    let value = state.stack.pop().unwrap();
+    match (value, key) {
+        (Value::Str(v), Value::Str(k)) => {
+            std::env::set_var(&k, &v);
+            Ok(())
+        }
+        (v, k) => {
+            state.stack.push(v);
+            state.stack.push(k);
+            Err("setenv: requires two strings (value key)".into())
+        }
+    }
+}
+
+/// `unsetenv` ( key -- ) Unset environment variable.
+pub fn unsetenv(state: &mut State) -> Result<(), String> {
+    let val = state.stack.pop().ok_or("unsetenv: stack underflow")?;
+    match val {
+        Value::Str(key) => {
+            std::env::remove_var(&key);
+            Ok(())
+        }
+        other => {
+            state.stack.push(other);
+            Err("unsetenv: requires string".into())
+        }
+    }
+}
+
+/// `env-append` ( value key -- ) Append value to colon-separated env var.
+pub fn env_append(state: &mut State) -> Result<(), String> {
+    if state.stack.len() < 2 {
+        return Err("env-append: stack underflow".into());
+    }
+    let key = state.stack.pop().unwrap();
+    let value = state.stack.pop().unwrap();
+    match (value, key) {
+        (Value::Str(v), Value::Str(k)) => {
+            let new_value = match std::env::var(&k) {
+                Ok(existing) => format!("{}:{}", existing, v),
+                Err(_) => v,
+            };
+            std::env::set_var(&k, &new_value);
+            Ok(())
+        }
+        (v, k) => {
+            state.stack.push(v);
+            state.stack.push(k);
+            Err("env-append: requires two strings (value key)".into())
+        }
+    }
+}
+
+/// `env-prepend` ( value key -- ) Prepend value to colon-separated env var.
+pub fn env_prepend(state: &mut State) -> Result<(), String> {
+    if state.stack.len() < 2 {
+        return Err("env-prepend: stack underflow".into());
+    }
+    let key = state.stack.pop().unwrap();
+    let value = state.stack.pop().unwrap();
+    match (value, key) {
+        (Value::Str(v), Value::Str(k)) => {
+            let new_value = match std::env::var(&k) {
+                Ok(existing) => format!("{}:{}", v, existing),
+                Err(_) => v,
+            };
+            std::env::set_var(&k, &new_value);
+            Ok(())
+        }
+        (v, k) => {
+            state.stack.push(v);
+            state.stack.push(k);
+            Err("env-prepend: requires two strings (value key)".into())
+        }
+    }
+}
+
+/// `env` ( -- vars... ) Push all environment variables onto stack.
+pub fn env_all(state: &mut State) -> Result<(), String> {
+    let mut vars: Vec<String> = std::env::vars()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect();
+    vars.sort();
+    for entry in vars {
+        state.stack.push(Value::Str(entry));
+    }
+    Ok(())
+}
+
+// ========== Directory navigation ==========
+
+/// `pushd` ( path -- ) Push current directory and change to path.
+pub fn pushd(state: &mut State) -> Result<(), String> {
+    let val = state.stack.pop().ok_or("pushd: stack underflow")?;
+    match val {
+        Value::Str(path) => {
+            let current = std::env::current_dir()
+                .map_err(|e| format!("pushd: {}", e))?
+                .to_string_lossy()
+                .to_string();
+            let expanded = expand_tilde(&path);
+            std::env::set_current_dir(&expanded)
+                .map_err(|e| format!("pushd: {}: {}", expanded, e))?;
+            state.dir_stack.push(current);
+            Ok(())
+        }
+        other => {
+            state.stack.push(other);
+            Err("pushd: requires string".into())
+        }
+    }
+}
+
+/// `popd` ( -- ) Pop directory from stack and change to it.
+pub fn popd(state: &mut State) -> Result<(), String> {
+    let dir = state.dir_stack.pop().ok_or("popd: directory stack empty")?;
+    std::env::set_current_dir(&dir)
+        .map_err(|e| format!("popd: {}: {}", dir, e))
+}
+
 /// Expand `~` to $HOME at the start of a path.
 fn expand_tilde(path: &str) -> String {
-    if path.starts_with('~') {
+    if let Some(rest) = path.strip_prefix('~') {
         if let Ok(home) = std::env::var("HOME") {
-            return format!("{}{}", home, &path[1..]);
+            return format!("{}{}", home, rest);
         }
     }
     path.to_string()
@@ -270,5 +414,155 @@ mod tests {
             Value::Output(out) => assert_eq!(out.trim(), "hello"),
             other => panic!("expected Output, got {:?}", other),
         }
+    }
+
+    // ===== Environment variable tests =====
+
+    #[test]
+    fn test_getenv_existing() {
+        let mut s = new_state();
+        // HOME is always set
+        s.stack.push(Value::Str("HOME".into()));
+        getenv(&mut s).unwrap();
+        assert_eq!(s.stack.len(), 1);
+        match &s.stack[0] {
+            Value::Str(v) => assert!(!v.is_empty()),
+            other => panic!("expected Str, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_getenv_nonexistent() {
+        let mut s = new_state();
+        s.stack.push(Value::Str("YAFSH_TEST_NONEXISTENT_VAR".into()));
+        getenv(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("".into())]);
+    }
+
+    #[test]
+    fn test_getenv_underflow() {
+        let mut s = new_state();
+        assert!(getenv(&mut s).is_err());
+    }
+
+    #[test]
+    fn test_getenv_wrong_type() {
+        let mut s = new_state();
+        s.stack.push(Value::Int(42));
+        assert!(getenv(&mut s).is_err());
+    }
+
+    #[test]
+    fn test_setenv_and_getenv() {
+        let mut s = new_state();
+        s.stack.push(Value::Str("test_value_42".into()));
+        s.stack.push(Value::Str("YAFSH_TEST_SET".into()));
+        setenv(&mut s).unwrap();
+        assert!(s.stack.is_empty());
+
+        s.stack.push(Value::Str("YAFSH_TEST_SET".into()));
+        getenv(&mut s).unwrap();
+        assert_eq!(s.stack, vec![Value::Str("test_value_42".into())]);
+
+        // Cleanup
+        std::env::remove_var("YAFSH_TEST_SET");
+    }
+
+    #[test]
+    fn test_setenv_underflow() {
+        let mut s = new_state();
+        s.stack.push(Value::Str("value".into()));
+        assert!(setenv(&mut s).is_err());
+    }
+
+    #[test]
+    fn test_unsetenv() {
+        let mut s = new_state();
+        std::env::set_var("YAFSH_TEST_UNSET", "temp");
+        s.stack.push(Value::Str("YAFSH_TEST_UNSET".into()));
+        unsetenv(&mut s).unwrap();
+        assert!(std::env::var("YAFSH_TEST_UNSET").is_err());
+    }
+
+    #[test]
+    fn test_unsetenv_underflow() {
+        let mut s = new_state();
+        assert!(unsetenv(&mut s).is_err());
+    }
+
+    #[test]
+    fn test_env_append() {
+        let mut s = new_state();
+        std::env::set_var("YAFSH_TEST_APPEND", "a");
+        s.stack.push(Value::Str("b".into()));
+        s.stack.push(Value::Str("YAFSH_TEST_APPEND".into()));
+        env_append(&mut s).unwrap();
+        assert_eq!(std::env::var("YAFSH_TEST_APPEND").unwrap(), "a:b");
+        std::env::remove_var("YAFSH_TEST_APPEND");
+    }
+
+    #[test]
+    fn test_env_prepend() {
+        let mut s = new_state();
+        std::env::set_var("YAFSH_TEST_PREPEND", "a");
+        s.stack.push(Value::Str("b".into()));
+        s.stack.push(Value::Str("YAFSH_TEST_PREPEND".into()));
+        env_prepend(&mut s).unwrap();
+        assert_eq!(std::env::var("YAFSH_TEST_PREPEND").unwrap(), "b:a");
+        std::env::remove_var("YAFSH_TEST_PREPEND");
+    }
+
+    #[test]
+    fn test_env_all() {
+        let mut s = new_state();
+        env_all(&mut s).unwrap();
+        // Should push at least one env var
+        assert!(!s.stack.is_empty());
+        // All entries should be Str and contain '='
+        for val in &s.stack {
+            match val {
+                Value::Str(entry) => assert!(entry.contains('=')),
+                other => panic!("expected Str, got {:?}", other),
+            }
+        }
+    }
+
+    // ===== pushd/popd tests =====
+
+    #[test]
+    fn test_pushd_popd_round_trip() {
+        let mut s = new_state();
+        let original = std::env::current_dir().unwrap();
+
+        s.stack.push(Value::Str("/tmp".into()));
+        pushd(&mut s).unwrap();
+        assert_eq!(
+            std::env::current_dir().unwrap().to_string_lossy(),
+            "/tmp"
+        );
+        assert_eq!(s.dir_stack.len(), 1);
+
+        popd(&mut s).unwrap();
+        assert_eq!(std::env::current_dir().unwrap(), original);
+        assert!(s.dir_stack.is_empty());
+    }
+
+    #[test]
+    fn test_pushd_underflow() {
+        let mut s = new_state();
+        assert!(pushd(&mut s).is_err());
+    }
+
+    #[test]
+    fn test_pushd_wrong_type() {
+        let mut s = new_state();
+        s.stack.push(Value::Int(42));
+        assert!(pushd(&mut s).is_err());
+    }
+
+    #[test]
+    fn test_popd_empty_stack() {
+        let mut s = new_state();
+        assert!(popd(&mut s).is_err());
     }
 }

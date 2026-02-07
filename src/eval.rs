@@ -238,22 +238,24 @@ fn handle_token_execution(state: &mut State, token: &str, is_quoted: bool) -> Re
         return Ok(());
     }
 
-    // Dictionary lookup
-    if let Some(word) = state.dict.get(token).cloned() {
-        match word {
-            Word::Builtin(f, _) => {
-                return f(state);
-            }
-            Word::Defined(tokens) => {
-                // Execute defined word: each token is unquoted
-                for t in &tokens {
-                    eval_token(state, t, false)?;
+    // Dictionary lookup (only for unquoted tokens)
+    if !is_quoted {
+        if let Some(word) = state.dict.get(token).cloned() {
+            match word {
+                Word::Builtin(f, _) => {
+                    return f(state);
                 }
-                return Ok(());
-            }
-            Word::ShellCmd(cmd) => {
-                state.stack.push(Value::Str(cmd));
-                return exec_word(state);
+                Word::Defined(tokens) => {
+                    // Execute defined word: each token is unquoted
+                    for t in &tokens {
+                        eval_token(state, t, false)?;
+                    }
+                    return Ok(());
+                }
+                Word::ShellCmd(cmd) => {
+                    state.stack.push(Value::Str(cmd));
+                    return exec_word(state);
+                }
             }
         }
     }
@@ -299,10 +301,8 @@ pub fn eval_token(state: &mut State, token: &str, is_quoted: bool) -> Result<(),
     }
 
     // 3. Is it a control flow keyword?
-    if !is_quoted {
-        if handle_control_flow_keywords(state, token)? {
-            return Ok(());
-        }
+    if !is_quoted && handle_control_flow_keywords(state, token)? {
+        return Ok(());
     }
 
     // 4. Execute normally

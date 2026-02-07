@@ -305,3 +305,358 @@ fn eval_exit_code_failure() {
     assert_eq!(s.stack.len(), 2);
     assert_eq!(s.stack[1], Value::Int(1));
 }
+
+// ========== Arithmetic ==========
+
+#[test]
+fn eval_add() {
+    assert_eq!(eval("3 7 +"), vec![Value::Int(10)]);
+}
+
+#[test]
+fn eval_sub() {
+    assert_eq!(eval("10 3 -"), vec![Value::Int(7)]);
+}
+
+#[test]
+fn eval_mul() {
+    assert_eq!(eval("6 7 *"), vec![Value::Int(42)]);
+}
+
+#[test]
+fn eval_div() {
+    assert_eq!(eval("15 3 /"), vec![Value::Int(5)]);
+}
+
+#[test]
+fn eval_div_by_zero() {
+    let mut s = new_state();
+    eval::eval_line(&mut s, "10 0").unwrap();
+    assert!(eval::eval_line(&mut s, "/").is_err());
+}
+
+#[test]
+fn eval_mod() {
+    assert_eq!(eval("10 3 mod"), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_mod_by_zero() {
+    let mut s = new_state();
+    eval::eval_line(&mut s, "10 0").unwrap();
+    assert!(eval::eval_line(&mut s, "mod").is_err());
+}
+
+#[test]
+fn eval_divmod() {
+    // 10 /mod 3 -> quotient=3, remainder=1
+    assert_eq!(eval("10 3 /mod"), vec![Value::Int(3), Value::Int(1)]);
+}
+
+#[test]
+fn eval_muldiv() {
+    // (2 * 6) / 4 = 3
+    assert_eq!(eval("2 6 4 */"), vec![Value::Int(3)]);
+}
+
+#[test]
+fn eval_arithmetic_chain() {
+    // 2 3 + 4 * = (2+3)*4 = 20
+    assert_eq!(eval("2 3 + 4 *"), vec![Value::Int(20)]);
+}
+
+#[test]
+fn eval_negative_arithmetic() {
+    assert_eq!(eval("-3 7 +"), vec![Value::Int(4)]);
+}
+
+// ========== Comparisons ==========
+
+#[test]
+fn eval_eq_true() {
+    assert_eq!(eval("5 5 ="), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_eq_false() {
+    assert_eq!(eval("5 7 ="), vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_eq_strings() {
+    let s = eval_lines(&["\"hello\" \"hello\" ="]);
+    assert_eq!(s.stack, vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_eq_strings_not_equal() {
+    let s = eval_lines(&["\"hello\" \"world\" ="]);
+    assert_eq!(s.stack, vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_neq() {
+    assert_eq!(eval("5 7 <>"), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_neq_equal() {
+    assert_eq!(eval("5 5 <>"), vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_gt_true() {
+    assert_eq!(eval("5 3 >"), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_gt_false() {
+    assert_eq!(eval("3 5 >"), vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_lt_true() {
+    assert_eq!(eval("3 5 <"), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_lt_false() {
+    assert_eq!(eval("5 3 <"), vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_gte_equal() {
+    assert_eq!(eval("5 5 >="), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_gte_greater() {
+    assert_eq!(eval("7 5 >="), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_gte_less() {
+    assert_eq!(eval("3 5 >="), vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_lte_equal() {
+    assert_eq!(eval("5 5 <="), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_lte_less() {
+    assert_eq!(eval("3 7 <="), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_lte_greater() {
+    assert_eq!(eval("7 3 <="), vec![Value::Int(0)]);
+}
+
+// ========== Boolean logic ==========
+
+#[test]
+fn eval_and_both_true() {
+    assert_eq!(eval("1 1 and"), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_and_one_false() {
+    assert_eq!(eval("1 0 and"), vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_or_one_true() {
+    assert_eq!(eval("1 0 or"), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_or_both_false() {
+    assert_eq!(eval("0 0 or"), vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_not_false() {
+    assert_eq!(eval("0 not"), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_not_true() {
+    assert_eq!(eval("1 not"), vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_xor_different() {
+    assert_eq!(eval("1 0 xor"), vec![Value::Int(1)]);
+}
+
+#[test]
+fn eval_xor_same() {
+    assert_eq!(eval("1 1 xor"), vec![Value::Int(0)]);
+}
+
+#[test]
+fn eval_boolean_with_comparison() {
+    // 5 > 3 and 10 > 7  =>  1 and 1  =>  1
+    assert_eq!(eval("5 3 > 10 7 > and"), vec![Value::Int(1)]);
+}
+
+// ========== String operations ==========
+
+#[test]
+fn eval_concat() {
+    let s = eval_lines(&["\"hello \" \"world\" concat"]);
+    assert_eq!(s.stack, vec![Value::Str("hello world".into())]);
+}
+
+#[test]
+fn eval_concat_empty() {
+    let s = eval_lines(&["\"hello\" \"\" concat"]);
+    assert_eq!(s.stack, vec![Value::Str("hello".into())]);
+}
+
+// ========== Environment builtins ==========
+
+#[test]
+fn eval_getenv() {
+    let s = eval_lines(&["\"HOME\" getenv"]);
+    assert_eq!(s.stack.len(), 1);
+    match &s.stack[0] {
+        Value::Str(v) => assert!(!v.is_empty()),
+        other => panic!("expected Str, got {:?}", other),
+    }
+}
+
+#[test]
+fn eval_setenv_getenv_round_trip() {
+    let s = eval_lines(&[
+        "\"round_trip_value\" \"YAFSH_TEST_RT\" setenv",
+        "\"YAFSH_TEST_RT\" getenv",
+    ]);
+    assert_eq!(s.stack, vec![Value::Str("round_trip_value".into())]);
+    std::env::remove_var("YAFSH_TEST_RT");
+}
+
+#[test]
+fn eval_unsetenv() {
+    std::env::set_var("YAFSH_TEST_UNSET_EVAL", "temp");
+    let s = eval_lines(&[
+        "\"YAFSH_TEST_UNSET_EVAL\" unsetenv",
+        "\"YAFSH_TEST_UNSET_EVAL\" getenv",
+    ]);
+    assert_eq!(s.stack, vec![Value::Str("".into())]);
+}
+
+// ========== File I/O ==========
+
+#[test]
+fn eval_write_file() {
+    let dir = std::env::temp_dir();
+    let path = dir.join("yafsh_eval_write_test.txt");
+    let path_str = path.to_string_lossy().to_string();
+
+    let s = eval_lines(&[
+        "\"test content\" >output",
+        &format!("\"{}\" >file", path_str),
+    ]);
+    assert!(s.stack.is_empty());
+
+    let contents = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(contents, "test content");
+    std::fs::remove_file(&path).ok();
+}
+
+#[test]
+fn eval_append_file() {
+    let dir = std::env::temp_dir();
+    let path = dir.join("yafsh_eval_append_test.txt");
+    let path_str = path.to_string_lossy().to_string();
+
+    std::fs::write(&path, "line1\n").unwrap();
+
+    let s = eval_lines(&[
+        "\"line2\\n\" >output",
+        &format!("\"{}\" >>file", path_str),
+    ]);
+    assert!(s.stack.is_empty());
+
+    let contents = std::fs::read_to_string(&path).unwrap();
+    assert!(contents.starts_with("line1\n"));
+    std::fs::remove_file(&path).ok();
+}
+
+// ========== pushd/popd ==========
+
+#[test]
+fn eval_pushd_popd() {
+    let original = std::env::current_dir().unwrap();
+
+    let s = eval_lines(&["\"/tmp\" pushd", "popd"]);
+    assert!(s.stack.is_empty());
+    assert_eq!(std::env::current_dir().unwrap(), original);
+}
+
+// ========== Introspection ==========
+
+#[test]
+fn eval_words() {
+    // Just verify it runs without error
+    let s = eval_lines(&["words"]);
+    assert!(s.stack.is_empty());
+}
+
+#[test]
+fn eval_help() {
+    let s = eval_lines(&["help"]);
+    assert!(s.stack.is_empty());
+}
+
+#[test]
+fn eval_see_builtin() {
+    let s = eval_lines(&["\"dup\" see"]);
+    assert!(s.stack.is_empty());
+}
+
+#[test]
+fn eval_see_defined_word() {
+    let s = eval_lines(&[": greet \"hello\" ;", "\"greet\" see"]);
+    assert!(s.stack.is_empty());
+}
+
+#[test]
+fn eval_see_undefined() {
+    let s = eval_lines(&["\"nonexistent\" see"]);
+    assert!(s.stack.is_empty());
+}
+
+// ========== Combined: arithmetic with if/else ==========
+
+#[test]
+fn eval_comparison_with_if() {
+    // if 5 > 3 then push "big" else push "small"
+    let s = eval_lines(&["5 3 > if \"big\" else \"small\" then"]);
+    assert_eq!(s.stack, vec![Value::Str("big".into())]);
+}
+
+#[test]
+fn eval_comparison_with_if_false() {
+    let s = eval_lines(&["3 5 > if \"big\" else \"small\" then"]);
+    assert_eq!(s.stack, vec![Value::Str("small".into())]);
+}
+
+// ========== Word definition with arithmetic ==========
+
+#[test]
+fn eval_word_with_arithmetic() {
+    // Define a word that squares a number
+    let s = eval_lines(&[": square dup * ;", "5 square"]);
+    assert_eq!(s.stack, vec![Value::Int(25)]);
+}
+
+#[test]
+fn eval_word_with_comparison() {
+    // Define a word that checks if a number is positive
+    let s = eval_lines(&[": positive? 0 > ;", "5 positive?"]);
+    assert_eq!(s.stack, vec![Value::Int(1)]);
+}

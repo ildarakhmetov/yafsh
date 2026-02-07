@@ -65,6 +65,14 @@ pub struct State {
     pub last_exit_code: i32,
     /// Control flow state for if/then/else
     pub control_flow: ControlFlow,
+    /// Directory stack for pushd/popd
+    pub dir_stack: Vec<String>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl State {
@@ -76,6 +84,7 @@ impl State {
             def_body: Vec::new(),
             last_exit_code: 0,
             control_flow: ControlFlow::Normal,
+            dir_stack: Vec::new(),
         }
     }
 }

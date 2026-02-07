@@ -14,9 +14,9 @@ pub fn tokenize(line: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut current = String::new();
     let mut in_quote = false;
-    let mut chars = line.chars();
+    let chars = line.chars();
 
-    while let Some(c) = chars.next() {
+    for c in chars {
         match c {
             '"' if !in_quote => {
                 // Start of quoted string: flush any current unquoted token
