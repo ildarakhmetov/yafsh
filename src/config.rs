@@ -1,5 +1,5 @@
 /// Version string for the shell.
-pub const VERSION: &str = "0.4.0";
+pub const VERSION: &str = "0.5.0";
 
 /// Return the path to the RC configuration file (~/.yafshrc).
 pub fn rc_path() -> Option<std::path::PathBuf> {
