@@ -258,6 +258,11 @@ Example `~/.yafshrc`:
 
 ---
 
-## No CI/CD
+## CI
 
-There is currently no CI/CD configuration. Tests must be run manually with `cargo test` before committing.
+GitHub Actions runs on every push and pull request (`.github/workflows/ci.yml`):
+
+- **Check** — `cargo check`
+- **Test** — `cargo test` (all integration tests)
+- **Format** — `cargo fmt --check`
+- **Clippy** — `cargo clippy -- -D warnings`
