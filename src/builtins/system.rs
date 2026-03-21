@@ -592,4 +592,153 @@ mod tests {
         let mut s = new_state();
         assert!(popd(&mut s).is_err());
     }
+
+    // ===== exec: non-string command =====
+
+    #[test]
+    fn test_exec_non_string_cmd_int() {
+        let mut s = new_state();
+        s.stack.push(Value::Int(42));
+        let err = exec_word(&mut s).unwrap_err();
+        assert!(err.contains("exec: top of stack must be a string"));
+        // Value should be restored
+        assert_eq!(s.stack, vec![Value::Int(42)]);
+    }
+
+    #[test]
+    fn test_exec_non_string_cmd_output() {
+        let mut s = new_state();
+        s.stack.push(Value::Output("data".into()));
+        let err = exec_word(&mut s).unwrap_err();
+        assert!(err.contains("exec: top of stack must be a string"));
+        assert_eq!(s.stack, vec![Value::Output("data".into())]);
+    }
+
+    // ===== exec: depth limit with Int arg in remaining =====
+
+    #[test]
+    fn test_exec_depth_limit_with_int_remaining() {
+        let mut s = new_state();
+        // Stack (bottom to top): Int(99), Str("hello"), Int(1) [depth], Str("/bin/echo")
+        s.stack.push(Value::Int(99)); // will remain on stack
+        s.stack.push(Value::Str("hello".into())); // consumed as arg
+        s.stack.push(Value::Int(1)); // depth limit: take only 1 arg
+        s.stack.push(Value::Str("/bin/echo".into()));
+        exec_word(&mut s).unwrap();
+        // Int(99) should remain, plus the Output
+        assert_eq!(s.stack.len(), 2);
+        assert_eq!(s.stack[0], Value::Int(99));
+        match &s.stack[1] {
+            Value::Output(out) => assert_eq!(out.trim(), "hello"),
+            other => panic!("expected Output, got {:?}", other),
+        }
+    }
+
+    // ===== exec: trace enabled does not crash =====
+
+    #[test]
+    fn test_exec_trace_enabled() {
+        let mut s = new_state();
+        s.trace = 1;
+        s.stack.push(Value::Str("hello".into()));
+        s.stack.push(Value::Str("/bin/echo".into()));
+        exec_word(&mut s).unwrap(); // just verify it doesn't panic
+        assert_eq!(s.last_exit_code, 0);
+    }
+
+    #[test]
+    fn test_exec_trace_with_stdin() {
+        let mut s = new_state();
+        s.trace = 1;
+        s.stack.push(Value::Output("hello\n".into()));
+        s.stack.push(Value::Str("/bin/cat".into()));
+        exec_word(&mut s).unwrap();
+        assert_eq!(s.last_exit_code, 0);
+    }
+
+    // ===== cd success =====
+
+    #[test]
+    fn test_cd_success() {
+        let mut s = new_state();
+        let original = std::env::current_dir().unwrap();
+        s.stack.push(Value::Str("/tmp".into()));
+        cd(&mut s).unwrap();
+        let new_dir = std::env::current_dir().unwrap();
+        // Restore original dir
+        std::env::set_current_dir(&original).ok();
+        assert_eq!(new_dir.to_string_lossy(), "/tmp");
+    }
+
+    // ===== env-var type errors =====
+
+    #[test]
+    fn test_setenv_wrong_type_key() {
+        let mut s = new_state();
+        s.stack.push(Value::Str("value".into()));
+        s.stack.push(Value::Int(99)); // key is Int, not Str
+        let err = setenv(&mut s).unwrap_err();
+        assert!(err.contains("setenv"));
+        // Both values should be restored
+        assert_eq!(s.stack.len(), 2);
+    }
+
+    #[test]
+    fn test_setenv_wrong_type_value() {
+        let mut s = new_state();
+        s.stack.push(Value::Int(42)); // value is Int, not Str
+        s.stack.push(Value::Str("KEY".into()));
+        let err = setenv(&mut s).unwrap_err();
+        assert!(err.contains("setenv"));
+        assert_eq!(s.stack.len(), 2);
+    }
+
+    #[test]
+    fn test_unsetenv_wrong_type() {
+        let mut s = new_state();
+        s.stack.push(Value::Int(123));
+        let err = unsetenv(&mut s).unwrap_err();
+        assert!(err.contains("unsetenv"));
+        assert_eq!(s.stack, vec![Value::Int(123)]);
+    }
+
+    #[test]
+    fn test_env_append_wrong_type_key() {
+        let mut s = new_state();
+        s.stack.push(Value::Str("val".into()));
+        s.stack.push(Value::Int(99)); // key is Int
+        let err = env_append(&mut s).unwrap_err();
+        assert!(err.contains("env-append"));
+        assert_eq!(s.stack.len(), 2);
+    }
+
+    #[test]
+    fn test_env_append_wrong_type_value() {
+        let mut s = new_state();
+        s.stack.push(Value::Int(42)); // value is Int
+        s.stack.push(Value::Str("KEY".into()));
+        let err = env_append(&mut s).unwrap_err();
+        assert!(err.contains("env-append"));
+        assert_eq!(s.stack.len(), 2);
+    }
+
+    #[test]
+    fn test_env_prepend_wrong_type_key() {
+        let mut s = new_state();
+        s.stack.push(Value::Str("val".into()));
+        s.stack.push(Value::Int(99)); // key is Int
+        let err = env_prepend(&mut s).unwrap_err();
+        assert!(err.contains("env-prepend"));
+        assert_eq!(s.stack.len(), 2);
+    }
+
+    #[test]
+    fn test_env_prepend_wrong_type_value() {
+        let mut s = new_state();
+        s.stack.push(Value::Int(42)); // value is Int
+        s.stack.push(Value::Str("KEY".into()));
+        let err = env_prepend(&mut s).unwrap_err();
+        assert!(err.contains("env-prepend"));
+        assert_eq!(s.stack.len(), 2);
+    }
 }

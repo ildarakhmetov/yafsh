@@ -352,6 +352,34 @@ mod tests {
         assert!(see(&mut s).is_err());
     }
 
+    #[test]
+    fn test_see_builtin_no_doc() {
+        // Register a builtin without a docstring and call see on it
+        let mut s = new_state();
+        fn noop(_state: &mut State) -> Result<(), String> {
+            Ok(())
+        }
+        s.dict.insert(
+            "test-noop".to_string(),
+            Word::Builtin(noop, None), // No docstring
+        );
+        s.stack.push(Value::Str("test-noop".into()));
+        see(&mut s).unwrap(); // Should print "<name> is a builtin function"
+        assert!(s.stack.is_empty());
+    }
+
+    #[test]
+    fn test_see_shell_cmd() {
+        let mut s = new_state();
+        s.dict.insert(
+            "echo".to_string(),
+            Word::ShellCmd("/bin/echo".to_string()),
+        );
+        s.stack.push(Value::Str("echo".into()));
+        see(&mut s).unwrap(); // Should print "echo is a shell command: /bin/echo"
+        assert!(s.stack.is_empty());
+    }
+
     // ===== Prompt helper tests =====
 
     #[test]
