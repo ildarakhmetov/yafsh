@@ -303,4 +303,26 @@ mod tests {
         let mut s = state_with(vec![Value::Str("file.txt".into())]);
         assert!(append_file(&mut s).is_err());
     }
+
+    #[test]
+    fn test_append_file_wrong_types() {
+        // Str as content (not Output) — hits the error path (lines 119-124)
+        let mut s = state_with(vec![
+            Value::Str("not output".into()),
+            Value::Str("file.txt".into()),
+        ]);
+        let err = append_file(&mut s).unwrap_err();
+        assert!(err.contains(">>file"));
+        // Values should be restored
+        assert_eq!(s.stack.len(), 2);
+    }
+
+    #[test]
+    fn test_dot_s_with_output_value() {
+        // Output on the stack — covers the Output branch in dot_s (line 30)
+        let mut s = state_with(vec![Value::Output("hello\n".into())]);
+        dot_s(&mut s).unwrap();
+        // Stack should be unchanged
+        assert_eq!(s.stack, vec![Value::Output("hello\n".into())]);
+    }
 }

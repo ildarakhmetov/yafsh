@@ -725,8 +725,29 @@ mod tests {
 
     #[test]
     fn test_add_wrong_type() {
+        // Str as bottom (a), Int on top (b) — hits a-is-not-int path (lines 19-22)
         let mut s = state_with(vec![Value::Str("a".into()), Value::Int(1)]);
         assert!(add(&mut s).is_err());
+        // Both values should be restored
+        assert_eq!(s.stack.len(), 2);
+    }
+
+    #[test]
+    fn test_add_top_wrong_type() {
+        // Str on TOP (b) — hits b-is-not-int path (lines 12-14)
+        let mut s = state_with(vec![Value::Int(1), Value::Str("b".into())]);
+        let err = add(&mut s).unwrap_err();
+        assert!(err.contains("+"));
+        // The Str should be restored to stack
+        assert_eq!(s.stack.len(), 2);
+        assert_eq!(s.stack[1], Value::Str("b".into()));
+    }
+
+    #[test]
+    fn test_sub_top_wrong_type() {
+        let mut s = state_with(vec![Value::Int(5), Value::Str("x".into())]);
+        assert!(sub(&mut s).is_err());
+        assert_eq!(s.stack.len(), 2);
     }
 
     #[test]
@@ -739,6 +760,52 @@ mod tests {
     fn test_and_wrong_type() {
         let mut s = state_with(vec![Value::Str("a".into()), Value::Int(1)]);
         assert!(bool_and(&mut s).is_err());
+    }
+
+    #[test]
+    fn test_neq_mixed_types() {
+        // Int and Str — type mismatch, restores both values (lines 151-153)
+        let mut s = state_with(vec![Value::Int(1), Value::Str("1".into())]);
+        let err = neq(&mut s).unwrap_err();
+        assert!(err.contains("<>"));
+        assert_eq!(s.stack.len(), 2);
+    }
+
+    #[test]
+    fn test_eq_mixed_types_restores_stack() {
+        let mut s = state_with(vec![Value::Int(1), Value::Str("1".into())]);
+        assert!(eq(&mut s).is_err());
+        // Both values should remain
+        assert_eq!(s.stack.len(), 2);
+    }
+
+    // muldiv type error paths (c, b, a non-Int)
+
+    #[test]
+    fn test_muldiv_c_wrong_type() {
+        // c (top) is Str — hits lines 89-91
+        let mut s = state_with(vec![Value::Int(2), Value::Int(6), Value::Str("x".into())]);
+        let err = muldiv(&mut s).unwrap_err();
+        assert!(err.contains("*/"));
+        assert_eq!(s.stack.len(), 3);
+    }
+
+    #[test]
+    fn test_muldiv_b_wrong_type() {
+        // b (second) is Str — hits lines 96-99
+        let mut s = state_with(vec![Value::Int(2), Value::Str("x".into()), Value::Int(4)]);
+        let err = muldiv(&mut s).unwrap_err();
+        assert!(err.contains("*/"));
+        assert_eq!(s.stack.len(), 3);
+    }
+
+    #[test]
+    fn test_muldiv_a_wrong_type() {
+        // a (bottom) is Str — hits lines 104-108
+        let mut s = state_with(vec![Value::Str("x".into()), Value::Int(6), Value::Int(4)]);
+        let err = muldiv(&mut s).unwrap_err();
+        assert!(err.contains("*/"));
+        assert_eq!(s.stack.len(), 3);
     }
 
     // ===== Conditional string helpers =====

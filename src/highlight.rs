@@ -217,6 +217,146 @@ fn find_word_at(line: &str, pos: usize) -> (usize, &str) {
     (start, &line[start..pos])
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_has_empty_dict() {
+        let h = YafshHelper::new();
+        assert!(h.dict_words.is_empty());
+    }
+
+    #[test]
+    fn test_default_equals_new() {
+        let h = YafshHelper::default();
+        assert!(h.dict_words.is_empty());
+    }
+
+    #[test]
+    fn test_update_words_stores_words() {
+        let mut h = YafshHelper::new();
+        h.update_words(vec!["dup".to_string(), "drop".to_string()]);
+        assert_eq!(h.dict_words.len(), 2);
+        assert!(h.dict_words.contains("dup"));
+        assert!(h.dict_words.contains("drop"));
+    }
+
+    #[test]
+    fn test_update_words_clears_old() {
+        let mut h = YafshHelper::new();
+        h.update_words(vec!["old".to_string()]);
+        h.update_words(vec!["new".to_string()]);
+        assert_eq!(h.dict_words.len(), 1);
+        assert!(h.dict_words.contains("new"));
+        assert!(!h.dict_words.contains("old"));
+    }
+
+    #[test]
+    fn test_highlight_empty_line() {
+        let h = YafshHelper::new();
+        let out = h.highlight("", 0);
+        assert_eq!(out.as_ref(), "");
+    }
+
+    #[test]
+    fn test_highlight_quoted_string_is_yellow() {
+        let h = YafshHelper::new();
+        let out = h.highlight("\"hello\"", 0);
+        assert!(out.contains("\x1b[33m"), "quoted string should be yellow");
+    }
+
+    #[test]
+    fn test_highlight_keyword_is_magenta() {
+        let h = YafshHelper::new();
+        for kw in &["if", "then", "else", "begin", "until", "do", "loop", ":", ";"] {
+            let out = h.highlight(kw, 0);
+            assert!(
+                out.contains("\x1b[35m"),
+                "keyword {:?} should be magenta",
+                kw
+            );
+        }
+    }
+
+    #[test]
+    fn test_highlight_number_is_cyan() {
+        let h = YafshHelper::new();
+        let out = h.highlight("42", 0);
+        assert!(out.contains("\x1b[36m"), "number should be cyan");
+    }
+
+    #[test]
+    fn test_highlight_negative_number_is_cyan() {
+        let h = YafshHelper::new();
+        let out = h.highlight("-7", 0);
+        assert!(out.contains("\x1b[36m"), "negative number should be cyan");
+    }
+
+    #[test]
+    fn test_highlight_dict_word_is_green() {
+        let mut h = YafshHelper::new();
+        h.update_words(vec!["myword".to_string()]);
+        let out = h.highlight("myword", 0);
+        assert!(out.contains("\x1b[32m"), "dict word should be green");
+    }
+
+    #[test]
+    fn test_highlight_unknown_word_has_no_color() {
+        let h = YafshHelper::new();
+        let out = h.highlight("unknownword", 0);
+        assert!(!out.contains("\x1b[3"), "unknown word should have no color");
+    }
+
+    #[test]
+    fn test_highlight_mixed_tokens() {
+        let mut h = YafshHelper::new();
+        h.update_words(vec!["dup".to_string()]);
+        let out = h.highlight("3 dup +", 0);
+        // cyan for 3, green for dup, magenta for... wait + is not a keyword
+        // just verify it doesn't crash and contains some color
+        assert!(out.contains("\x1b[36m")); // 3 is cyan
+        assert!(out.contains("\x1b[32m")); // dup is green
+    }
+
+    // find_word_at is private but tested indirectly; expose via a wrapper
+    #[test]
+    fn test_find_word_at_end_of_word() {
+        // Simulate calling find_word_at via the public interface
+        // "hello world" with pos at end (11) → should find "world"
+        let line = "hello world";
+        let pos = line.len();
+        let (start, word) = super::find_word_at(line, pos);
+        assert_eq!(word, "world");
+        assert_eq!(start, 6);
+    }
+
+    #[test]
+    fn test_find_word_at_mid_word() {
+        // pos in the middle of "world" (e.g. after "wor")
+        let line = "hello world";
+        let pos = 9; // "hello wor" — cursor after 'r'
+        let (_start, word) = super::find_word_at(line, pos);
+        assert_eq!(word, "wor");
+    }
+
+    #[test]
+    fn test_find_word_at_start_of_line() {
+        let line = "dup";
+        let pos = 0;
+        let (start, word) = super::find_word_at(line, pos);
+        assert_eq!(word, "");
+        assert_eq!(start, 0);
+    }
+
+    #[test]
+    fn test_find_word_at_empty_line() {
+        let (start, word) = super::find_word_at("", 0);
+        assert_eq!(word, "");
+        assert_eq!(start, 0);
+    }
+}
+
 // ========== Hinter (no-op) ==========
 
 impl Hinter for YafshHelper {
