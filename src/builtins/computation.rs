@@ -320,7 +320,9 @@ pub fn cond_wrap(state: &mut State) -> Result<(), String> {
             if s.is_empty() {
                 state.stack.push(Value::Str(String::new()));
             } else {
-                state.stack.push(Value::Str(format!("{}{}{}", prefix, s, suffix)));
+                state
+                    .stack
+                    .push(Value::Str(format!("{}{}{}", prefix, s, suffix)));
             }
             Ok(())
         }
@@ -357,8 +359,7 @@ pub fn loop_j(state: &mut State) -> Result<(), String> {
         return Err("j: not inside a nested loop".into());
     }
     match &state.loop_stack[len - 2] {
-        LoopInfo::DoCountedLoop { current, .. }
-        | LoopInfo::DoPlusCountedLoop { current, .. } => {
+        LoopInfo::DoCountedLoop { current, .. } | LoopInfo::DoPlusCountedLoop { current, .. } => {
             state.stack.push(Value::Int(*current));
             Ok(())
         }
@@ -697,7 +698,10 @@ mod tests {
 
     #[test]
     fn test_concat() {
-        let mut s = state_with(vec![Value::Str("hello ".into()), Value::Str("world".into())]);
+        let mut s = state_with(vec![
+            Value::Str("hello ".into()),
+            Value::Str("world".into()),
+        ]);
         concat(&mut s).unwrap();
         assert_eq!(s.stack, vec![Value::Str("hello world".into())]);
     }

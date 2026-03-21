@@ -172,7 +172,10 @@ fn trace_fmt_value_colored(val: &Value) -> String {
             if line_count <= 1 {
                 let trimmed = s.trim_end();
                 if trimmed.len() > 30 {
-                    format!("{C_MAGENTA}<<{C_RESET}{}...{C_MAGENTA}>>{C_RESET}", &trimmed[..27])
+                    format!(
+                        "{C_MAGENTA}<<{C_RESET}{}...{C_MAGENTA}>>{C_RESET}",
+                        &trimmed[..27]
+                    )
                 } else {
                     format!("{C_MAGENTA}<<{C_RESET}{}{C_MAGENTA}>>{C_RESET}", trimmed)
                 }
@@ -256,18 +259,12 @@ fn trace_print_step(
     );
     if level >= 3 {
         if let Some(doc) = doc {
-            eprintln!(
-                "  {C_DIM}{:>28} {}{C_RESET}",
-                "", doc
-            );
+            eprintln!("  {C_DIM}{:>28} {}{C_RESET}", "", doc);
         }
     }
     if level >= 2 {
         let stack_display = trace_fmt_stack(after);
-        eprintln!(
-            "  {C_DIM}{:>28} Stack:{C_RESET} {}",
-            "", stack_display
-        );
+        eprintln!("  {C_DIM}{:>28} Stack:{C_RESET} {}", "", stack_display);
     }
     let _ = std::io::stderr().flush();
 }
@@ -506,7 +503,15 @@ pub fn eval_token(state: &mut State, token: &str, is_quoted: bool) -> Result<(),
         if let Some(before) = stack_before {
             state.trace_step += 1;
             let doc = trace_lookup_doc(state, token, is_quoted);
-            trace_print_step(trace_level, state.trace_step, token, is_quoted, &before, &state.stack, doc);
+            trace_print_step(
+                trace_level,
+                state.trace_step,
+                token,
+                is_quoted,
+                &before,
+                &state.stack,
+                doc,
+            );
         }
         return Ok(());
     }
@@ -518,7 +523,15 @@ pub fn eval_token(state: &mut State, token: &str, is_quoted: bool) -> Result<(),
     if let Some(before) = stack_before {
         state.trace_step += 1;
         let doc = trace_lookup_doc(state, token, is_quoted);
-        trace_print_step(trace_level, state.trace_step, token, is_quoted, &before, &state.stack, doc);
+        trace_print_step(
+            trace_level,
+            state.trace_step,
+            token,
+            is_quoted,
+            &before,
+            &state.stack,
+            doc,
+        );
     }
 
     result

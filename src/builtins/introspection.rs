@@ -371,10 +371,8 @@ mod tests {
     #[test]
     fn test_see_shell_cmd() {
         let mut s = new_state();
-        s.dict.insert(
-            "echo".to_string(),
-            Word::ShellCmd("/bin/echo".to_string()),
-        );
+        s.dict
+            .insert("echo".to_string(), Word::ShellCmd("/bin/echo".to_string()));
         s.stack.push(Value::Str("echo".into()));
         see(&mut s).unwrap(); // Should print "echo is a shell command: /bin/echo"
         assert!(s.stack.is_empty());

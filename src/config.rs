@@ -62,7 +62,10 @@ mod tests {
             std::env::set_var("HOME", h);
         }
 
-        assert!(result.is_none(), "rc_path should be None when HOME is unset");
+        assert!(
+            result.is_none(),
+            "rc_path should be None when HOME is unset"
+        );
     }
 
     #[test]

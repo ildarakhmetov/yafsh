@@ -1,10 +1,9 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use crate::types::{State, Value};
 #[cfg(test)]
 use crate::builtins;
-
+use crate::types::{State, Value};
 
 /// `.` ( a -- ) Print and remove top item with newline.
 pub fn dot(state: &mut State) -> Result<(), String> {

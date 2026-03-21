@@ -139,7 +139,11 @@ impl Highlighter for YafshHelper {
         true
     }
 
-    fn highlight_prompt<'b, 's: 'b, 'p: 'b>(&'s self, prompt: &'p str, _default: bool) -> Cow<'b, str> {
+    fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
+        &'s self,
+        prompt: &'p str,
+        _default: bool,
+    ) -> Cow<'b, str> {
         Cow::Borrowed(prompt)
     }
 }
@@ -162,12 +166,7 @@ impl Validator for YafshHelper {
 impl Completer for YafshHelper {
     type Candidate = Pair;
 
-    fn complete(
-        &self,
-        line: &str,
-        pos: usize,
-        ctx: &Context<'_>,
-    ) -> Result<(usize, Vec<Pair>)> {
+    fn complete(&self, line: &str, pos: usize, ctx: &Context<'_>) -> Result<(usize, Vec<Pair>)> {
         // Find the word being typed
         let (word_start, word) = find_word_at(line, pos);
 
@@ -269,7 +268,9 @@ mod tests {
     #[test]
     fn test_highlight_keyword_is_magenta() {
         let h = YafshHelper::new();
-        for kw in &["if", "then", "else", "begin", "until", "do", "loop", ":", ";"] {
+        for kw in &[
+            "if", "then", "else", "begin", "until", "do", "loop", ":", ";",
+        ] {
             let out = h.highlight(kw, 0);
             assert!(
                 out.contains("\x1b[35m"),
