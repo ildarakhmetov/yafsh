@@ -127,9 +127,7 @@ pub fn exec_word(state: &mut State) -> Result<(), String> {
                         let _ = stdin.write_all(data.as_bytes());
                     });
                 }
-                child
-                    .wait_with_output()
-                    .map_err(|e| format!("exec: {}", e))
+                child.wait_with_output().map_err(|e| format!("exec: {}", e))
             }
             Err(e) => Err(format!("exec: {}: {}", cmd, e)),
         }
@@ -169,8 +167,7 @@ pub fn cd(state: &mut State) -> Result<(), String> {
     match val {
         Value::Str(path) => {
             let expanded = expand_tilde(&path);
-            std::env::set_current_dir(&expanded)
-                .map_err(|e| format!("cd: {}: {}", expanded, e))
+            std::env::set_current_dir(&expanded).map_err(|e| format!("cd: {}: {}", expanded, e))
         }
         _ => Err("cd: requires string".into()),
     }
@@ -316,8 +313,7 @@ pub fn pushd(state: &mut State) -> Result<(), String> {
 /// `popd` ( -- ) Pop directory from stack and change to it.
 pub fn popd(state: &mut State) -> Result<(), String> {
     let dir = state.dir_stack.pop().ok_or("popd: directory stack empty")?;
-    std::env::set_current_dir(&dir)
-        .map_err(|e| format!("popd: {}: {}", dir, e))
+    std::env::set_current_dir(&dir).map_err(|e| format!("popd: {}: {}", dir, e))
 }
 
 /// Expand `~` to $HOME at the start of a path.
@@ -461,7 +457,8 @@ mod tests {
     #[test]
     fn test_getenv_nonexistent() {
         let mut s = new_state();
-        s.stack.push(Value::Str("YAFSH_TEST_NONEXISTENT_VAR".into()));
+        s.stack
+            .push(Value::Str("YAFSH_TEST_NONEXISTENT_VAR".into()));
         getenv(&mut s).unwrap();
         assert_eq!(s.stack, vec![Value::Str("".into())]);
     }
@@ -563,10 +560,7 @@ mod tests {
 
         s.stack.push(Value::Str("/tmp".into()));
         pushd(&mut s).unwrap();
-        assert_eq!(
-            std::env::current_dir().unwrap().to_string_lossy(),
-            "/tmp"
-        );
+        assert_eq!(std::env::current_dir().unwrap().to_string_lossy(), "/tmp");
         assert_eq!(s.dir_stack.len(), 1);
 
         popd(&mut s).unwrap();

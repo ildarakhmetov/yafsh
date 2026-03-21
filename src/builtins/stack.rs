@@ -147,7 +147,10 @@ mod tests {
     fn test_dup_preserves_type() {
         let mut s = state_with(vec![Value::Str("hello".into())]);
         dup(&mut s).unwrap();
-        assert_eq!(s.stack, vec![Value::Str("hello".into()), Value::Str("hello".into())]);
+        assert_eq!(
+            s.stack,
+            vec![Value::Str("hello".into()), Value::Str("hello".into())]
+        );
     }
 
     #[test]

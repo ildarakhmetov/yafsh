@@ -107,18 +107,15 @@ fn load_rc(state: &mut State) {
 /// Run the interactive REPL with rustyline (when stdin is a TTY).
 fn run_interactive(state: &mut State) {
     let helper = YafshHelper::new();
-    let mut rl = match Editor::with_config(
-        rustyline::Config::builder()
-            .auto_add_history(true)
-            .build(),
-    ) {
-        Ok(rl) => rl,
-        Err(e) => {
-            eprintln!("Failed to initialize editor: {}", e);
-            run_simple(state);
-            return;
-        }
-    };
+    let mut rl =
+        match Editor::with_config(rustyline::Config::builder().auto_add_history(true).build()) {
+            Ok(rl) => rl,
+            Err(e) => {
+                eprintln!("Failed to initialize editor: {}", e);
+                run_simple(state);
+                return;
+            }
+        };
 
     rl.set_helper(Some(helper));
 

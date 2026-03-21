@@ -51,8 +51,16 @@ pub enum LoopType {
 /// Active loop info (for i/j index access).
 #[derive(Clone, Debug)]
 pub enum LoopInfo {
-    DoCountedLoop { start: i64, limit: i64, current: i64 },
-    DoPlusCountedLoop { start: i64, limit: i64, current: i64 },
+    DoCountedLoop {
+        start: i64,
+        limit: i64,
+        current: i64,
+    },
+    DoPlusCountedLoop {
+        start: i64,
+        limit: i64,
+        current: i64,
+    },
     BeginUntilLoop,
     BeginWhileLoop,
 }

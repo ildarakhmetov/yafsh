@@ -39,13 +39,19 @@ fn push_negative_integer() {
 
 #[test]
 fn push_quoted_string() {
-    assert_eq!(eval("\"hello world\""), vec![Value::Str("hello world".into())]);
+    assert_eq!(
+        eval("\"hello world\""),
+        vec![Value::Str("hello world".into())]
+    );
 }
 
 #[test]
 fn push_unquoted_not_in_path() {
     // "xyznotacommand" won't be in PATH or dict, should be pushed as Str
-    assert_eq!(eval("xyznotacommand"), vec![Value::Str("xyznotacommand".into())]);
+    assert_eq!(
+        eval("xyznotacommand"),
+        vec![Value::Str("xyznotacommand".into())]
+    );
 }
 
 #[test]
@@ -176,10 +182,7 @@ fn eval_word_definition() {
 #[test]
 fn eval_word_definition_with_builtins() {
     let s = eval_lines(&[": dup2 dup dup ;", "5 dup2"]);
-    assert_eq!(
-        s.stack,
-        vec![Value::Int(5), Value::Int(5), Value::Int(5)]
-    );
+    assert_eq!(s.stack, vec![Value::Int(5), Value::Int(5), Value::Int(5)]);
 }
 
 #[test]
@@ -575,10 +578,7 @@ fn eval_append_file() {
 
     std::fs::write(&path, "line1\n").unwrap();
 
-    let s = eval_lines(&[
-        "\"line2\\n\" >output",
-        &format!("\"{}\" >>file", path_str),
-    ]);
+    let s = eval_lines(&["\"line2\\n\" >output", &format!("\"{}\" >>file", path_str)]);
     assert!(s.stack.is_empty());
 
     let contents = std::fs::read_to_string(&path).unwrap();
@@ -835,10 +835,7 @@ fn eval_each_with_body() {
     eval::eval_line(&mut s, "each \"!\" concat then").unwrap();
     assert_eq!(
         s.stack,
-        vec![
-            Value::Str("hello!".into()),
-            Value::Str("world!".into())
-        ]
+        vec![Value::Str("hello!".into()), Value::Str("world!".into())]
     );
 }
 
@@ -984,10 +981,7 @@ fn eval_cond_wrap_empty() {
 #[test]
 fn eval_cond_prefix_in_word_definition() {
     // Simulate prompt building: "$gitbranch" "@" ?prefix
-    let s = eval_lines(&[
-        ": branch-prefix \"@\" ?prefix ;",
-        "\"main\" branch-prefix",
-    ]);
+    let s = eval_lines(&[": branch-prefix \"@\" ?prefix ;", "\"main\" branch-prefix"]);
     assert_eq!(s.stack, vec![Value::Str("@main".into())]);
 }
 
@@ -1315,7 +1309,11 @@ fn eval_until_non_integer_condition_errors() {
     let result = eval::eval_line(&mut s, r#"begin "not-an-int" until"#);
     assert!(result.is_err());
     let msg = result.unwrap_err();
-    assert!(msg.contains("until"), "error should mention 'until': {}", msg);
+    assert!(
+        msg.contains("until"),
+        "error should mention 'until': {}",
+        msg
+    );
 }
 
 #[test]
@@ -1325,7 +1323,11 @@ fn eval_while_non_integer_condition_errors() {
     let result = eval::eval_line(&mut s, r#"begin "not-an-int" while 1 repeat"#);
     assert!(result.is_err());
     let msg = result.unwrap_err();
-    assert!(msg.contains("while"), "error should mention 'while': {}", msg);
+    assert!(
+        msg.contains("while"),
+        "error should mention 'while': {}",
+        msg
+    );
 }
 
 #[test]
@@ -1335,7 +1337,11 @@ fn eval_plus_loop_non_integer_step_errors() {
     let result = eval::eval_line(&mut s, r#"0 3 do "bad-step" +loop"#);
     assert!(result.is_err());
     let msg = result.unwrap_err();
-    assert!(msg.contains("+loop"), "error should mention '+loop': {}", msg);
+    assert!(
+        msg.contains("+loop"),
+        "error should mention '+loop': {}",
+        msg
+    );
 }
 
 #[test]
@@ -1345,7 +1351,11 @@ fn eval_plus_loop_step_underflow_errors() {
     let result = eval::eval_line(&mut s, "0 3 do +loop");
     assert!(result.is_err());
     let msg = result.unwrap_err();
-    assert!(msg.contains("+loop"), "error should mention '+loop': {}", msg);
+    assert!(
+        msg.contains("+loop"),
+        "error should mention '+loop': {}",
+        msg
+    );
 }
 
 // ========== Nested loops (depth tracking) ==========
@@ -1354,9 +1364,7 @@ fn eval_plus_loop_step_underflow_errors() {
 fn eval_nested_begin_until() {
     // Inner begin...until inside outer begin...until
     // Covers the depth-tracking path in handle_loop_collection
-    let s = eval_lines(&[
-        "0 begin 1 + dup 3 = until",
-    ]);
+    let s = eval_lines(&["0 begin 1 + dup 3 = until"]);
     assert_eq!(s.stack, vec![Value::Int(3)]);
 }
 
@@ -1364,9 +1372,7 @@ fn eval_nested_begin_until() {
 fn eval_nested_do_plus_loop() {
     // Inner do...+loop inside outer do...+loop
     // Covers the nested +loop depth tracking
-    let s = eval_lines(&[
-        "0 0 3 do 0 3 do i j + loop 1 +loop",
-    ]);
+    let s = eval_lines(&["0 0 3 do 0 3 do i j + loop 1 +loop"]);
     // outer i: 0,1,2; inner j: 0,1,2 for each outer → sum of (i+j) for each pair
     // outer i=0: j=0,1,2 → 0+1+2=3; outer i=1: 3+4+5=12; outer i=2: 12+13+14=39?
     // Actually this accumulates on the stack so just check it doesn't crash
